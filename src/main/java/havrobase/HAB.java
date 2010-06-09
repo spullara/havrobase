@@ -6,6 +6,7 @@ import avrobase.AvroFormat;
 import avrobase.Row;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
+import com.sun.tools.javac.resources.version;
 import org.apache.avro.Schema;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;
@@ -83,7 +84,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
   @Named("schema")
   private byte[] schemaTable = $("schema");
 
-  // Caching
+  // Cache the schemas with a two-way lookup
   private Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
   private Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();
 
@@ -104,32 +105,13 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
       schemaTable = pool.getTable(this.schemaTable);
     } catch (RuntimeException e) {
       if (e.getCause() instanceof TableNotFoundException) {
-        HColumnDescriptor family = new HColumnDescriptor(AVRO_FAMILY);
-        family.setMaxVersions(1);
-        family.setCompressionType(Compression.Algorithm.LZO);
-        family.setInMemory(true);
-        HTableDescriptor tableDesc = new HTableDescriptor(this.schemaTable);
-        tableDesc.addFamily(family);
-        try {
-          admin.createTable(tableDesc);
-        } catch (IOException e1) {
-          throw new AvroBaseException(e1);
-        }
-        schemaTable = pool.getTable(this.schemaTable);
+        schemaTable = createHAvroBase();
       } else {
-        e.printStackTrace();
         throw new AvroBaseException(e.getCause());
       }
     }
     try {
-      Scan scan = new Scan();
-      scan.addColumn(AVRO_FAMILY, SCHEMA_COLUMN);
-      ResultScanner scanner = schemaTable.getScanner(scan);
-      for (Result result : scanner) {
-        String row = $_(result.getRow());
-        byte[] value = result.getValue(AVRO_FAMILY, SCHEMA_COLUMN);
-        loadSchema(value, row);
-      }
+      loadSchemas(schemaTable);
     } catch (IOException e) {
       throw new AvroBaseException(e);
     } finally {
@@ -137,8 +119,38 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     }
   }
 
-  // Load a schema from the schema table
+  // Load all the schemas currently registered in hbase
+  private void loadSchemas(HTable schemaTable) throws IOException {
+    Scan scan = new Scan();
+    scan.addColumn(AVRO_FAMILY, SCHEMA_COLUMN);
+    ResultScanner scanner = schemaTable.getScanner(scan);
+    for (Result result : scanner) {
+      String row = $_(result.getRow());
+      byte[] value = result.getValue(AVRO_FAMILY, SCHEMA_COLUMN);
+      loadSchema(value, row);
+    }
+  }
 
+  // Given a table and family, create a corresponding table and
+  // family with hbase.
+  private HTable createHAvroBase() throws AvroBaseException {
+    HTable schemaTable;
+    HColumnDescriptor family = new HColumnDescriptor(AVRO_FAMILY);
+    family.setMaxVersions(1);
+    family.setCompressionType(Compression.Algorithm.LZO);
+    family.setInMemory(true);
+    HTableDescriptor tableDesc = new HTableDescriptor(this.schemaTable);
+    tableDesc.addFamily(family);
+    try {
+      admin.createTable(tableDesc);
+    } catch (IOException e1) {
+      throw new AvroBaseException(e1);
+    }
+    schemaTable = pool.getTable(this.schemaTable);
+    return schemaTable;
+  }
+
+  // Load a schema from the schema table
   private Schema loadSchema(byte[] value, String row) throws IOException {
     Schema schema = Schema.parse(new ByteArrayInputStream(value));
     schemaCache.put(row, schema);
@@ -148,34 +160,14 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
 
   @Override
   public Row<T> get(byte[] row) throws AvroBaseException {
-    Row<T> rowResult = new Row<T>();
-    rowResult.row = row;
     HTable table = getTable(tableName, family);
     try {
       Result result = getHBaseRow(table, row, family);
-      populateRowResult(rowResult, result, row);
+      return getRowResult(result, row);
     } catch (IOException e) {
       throw new AvroBaseException(e);
     } finally {
       pool.putTable(table);
-    }
-    return rowResult;
-  }
-
-  private void populateRowResult(Row<T> rowResult, Result result, byte[] row) throws AvroBaseException {
-    try {
-      byte[] latest = getMetaData(rowResult, result, family);
-      if (latest != null) {
-        Schema schema = loadSchema(result, row, family);
-        byte[] formatB = result.getValue(family, FORMAT_COLUMN);
-        AvroFormat format = AvroFormat.BINARY;
-        if (formatB != null) {
-          format = AvroFormat.values()[Bytes.toInt(formatB)];
-        }
-        rowResult.value = readValue(latest, schema, format);
-      }
-    } catch (IOException e) {
-      throw new AvroBaseException(e);
     }
   }
 
@@ -185,7 +177,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     long version;
     try {
       do {
-        // Spin until success, last one wins.
+        // FIXME: Spin until success, last one wins. Provably dangerous?
         version = getVersion(family, row, table);
       } while (!put(row, value, version));
     } catch (IOException e) {
@@ -201,7 +193,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     try {
       Schema schema = value.getSchema();
       String schemaKey = storeSchema(schema);
-      byte[] bytes = serialize(value, schema, format);
+      byte[] bytes = serialize(value);
       Put put = new Put(row);
       put.add(family, SCHEMA_COLUMN, $(schemaKey));
       put.add(family, DATA_COLUMN, bytes);
@@ -244,12 +236,8 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
             @Override
             public Row<T> next() {
               Result result = results.next();
-              Row<T> rowResult = new Row<T>();
-              byte[] row = result.getRow();
-              rowResult.row = row;
               try {
-                populateRowResult(rowResult, result, row);
-                return rowResult;
+                return getRowResult(result, result.getRow());
               } catch (AvroBaseException e) {
                 throw new RuntimeException(e);
               }
@@ -264,12 +252,57 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     } catch (IOException e) {
       throw new AvroBaseException(e);
     } finally {
-      // Is this safe?
+      // FIXME: Is this safe?
       pool.putTable(table);
     }
   }
 
-  private byte[] serialize(T value, Schema schema, AvroFormat format) throws IOException {
+  // Given an HBase row result take it apart and populate the Row wrapper metadata.
+  private Row<T> getRowResult(Result result, byte[] row) throws AvroBaseException {
+    // Defaults
+    byte[] latest = null;
+    long timestamp = Long.MAX_VALUE;
+    long version = -1;
+    
+    try {
+      // Run through and find the latest value to get the bytes and the timestamp
+      NavigableMap<byte[], NavigableMap<byte[], NavigableMap<Long, byte[]>>> map = result.getMap();
+      if (map != null) {
+        NavigableMap<byte[], NavigableMap<Long, byte[]>> familyData = map.get(family);
+        NavigableMap<Long, byte[]> values = familyData.get(DATA_COLUMN);
+        if (values != null) {
+          for (Map.Entry<Long, byte[]> e : values.entrySet()) {
+            if (e.getKey() < timestamp) {
+              latest = e.getValue();
+            }
+          }
+        }
+
+        // Grab the version
+        byte[] versionB = result.getValue(family, VERSION_COLUMN);
+        version = versionB == null ? -1 : Bytes.toLong(versionB);
+      }
+      // If the latest is null, just give up and return null
+      if (latest != null) {
+        // If not, load it up and return wrapped Row
+        Schema schema = loadSchema(result);
+        byte[] formatB = result.getValue(family, FORMAT_COLUMN);
+        AvroFormat format = AvroFormat.BINARY;
+        if (formatB != null) {
+          format = AvroFormat.values()[Bytes.toInt(formatB)];
+        }
+        return new Row<T>(readValue(latest, schema, format), row, timestamp, version);
+      }
+      return null;
+    } catch (IOException e) {
+      throw new AvroBaseException(e);
+    }
+  }
+
+  // Serialize the Avro instance using its schema and the
+  // format set for this avrobase
+  private byte[] serialize(T value) throws IOException {
+    Schema schema = value.getSchema();
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     Encoder be;
     switch (format) {
@@ -287,6 +320,8 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     return baos.toByteArray();
   }
 
+  // Pull the version out of the version column. Version 0 means that it does not exist
+  // in the hbase row
   private long getVersion(byte[] columnFamily, byte[] row, HTable table) throws IOException {
     Get get = new Get(row);
     get.addColumn(columnFamily, VERSION_COLUMN);
@@ -301,6 +336,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     return version;
   }
 
+  // Ensure that this schema is present within the configured schema table
   private String storeSchema(Schema schema) throws AvroBaseException {
     String schemaKey;
     synchronized (schema) {
@@ -336,7 +372,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     return schemaKey;
   }
 
-
+  // Pull an hbase row, ready to be wrapped by Row
   private Result getHBaseRow(HTable table, byte[] row, byte[] columnFamily) throws IOException {
     Get get = new Get(row);
     get.addColumn(columnFamily, DATA_COLUMN);
@@ -346,6 +382,8 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     return table.get(get);
   }
 
+  // Read the avro serialized data using the specified schema and format
+  // in the hbase row
   private T readValue(byte[] latest, Schema schema, AvroFormat format) throws IOException {
     Decoder d;
     switch (format) {
@@ -362,8 +400,10 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     return sdr.read(null, d);
   }
 
-  private Schema loadSchema(Result result, byte[] row, byte[] columnFamily) throws AvroBaseException, IOException {
-    byte[] schemaKey = result.getValue(columnFamily, SCHEMA_COLUMN);
+  // Load a schema from the current hbase row
+  private Schema loadSchema(Result result) throws AvroBaseException, IOException {
+    byte[] row = result.getRow();
+    byte[] schemaKey = result.getValue(family, SCHEMA_COLUMN);
     if (schemaKey == null) {
       throw new AvroBaseException("Schema not set for row: " + $_(row));
     }
@@ -385,34 +425,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     return schema;
   }
 
-  private byte[] getMetaData(Row<T> rowResult, Result result, byte[] columnFamily) {
-    NavigableMap<byte[], NavigableMap<byte[], NavigableMap<Long, byte[]>>> map = result.getMap();
-    if (map == null) return null;
-    NavigableMap<byte[], NavigableMap<Long, byte[]>> familyData = map.get(columnFamily);
-    NavigableMap<Long, byte[]> values = familyData.get(DATA_COLUMN);
-    long timestamp = Long.MAX_VALUE;
-    byte[] latest = null;
-    if (values != null) {
-      for (Map.Entry<Long, byte[]> e : values.entrySet()) {
-        if (e.getKey() < timestamp) {
-          latest = e.getValue();
-        }
-      }
-    }
-    rowResult.timestamp = timestamp;
-    byte[] version = result.getValue(columnFamily, VERSION_COLUMN);
-    rowResult.version = version == null ? -1 : Bytes.toLong(version);
-    return latest;
-  }
-
-  private static byte[] $(String s) {
-    return Bytes.toBytes(s);
-  }
-
-  private static String $_(byte[] s) {
-    return Bytes.toString(s);
-  }
-
+  // Get or create the specified table with columnfamily
   private HTable getTable(byte[] tableName, byte[] columnFamily) throws AvroBaseException {
     HTable table;
     try {
@@ -437,4 +450,14 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     }
     return table;
   }
+
+  // Inlinable converters
+  private static byte[] $(String s) {
+    return Bytes.toBytes(s);
+  }
+
+  private static String $_(byte[] s) {
+    return Bytes.toString(s);
+  }
+
 }

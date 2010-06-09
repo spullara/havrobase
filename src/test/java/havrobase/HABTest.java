@@ -90,9 +90,7 @@ public class HABTest {
   public void testNoRow() throws AvroBaseException {
     AvroBase<User> instance = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
     Row<User> row = instance.get(Bytes.toBytes("lukew"));
-    assertEquals(null, row.value);
-    assertEquals(-1, row.version);
-    assertEquals(Long.MAX_VALUE, row.timestamp);
+    assertEquals(null, row);
   }
 
   @Test
@@ -173,7 +171,7 @@ public class HABTest {
     byte[] row = Bytes.toBytes("spullara");
     Row<User> loaded = userHAB.get(row);
     for (Row<User> user : userHAB.scan(row, row)) {
-      assertEquals(loaded.value, user.value);
+      assertEquals(loaded, user);
     }
   }
 
