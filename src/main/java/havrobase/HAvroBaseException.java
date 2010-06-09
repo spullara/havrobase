@@ -1,5 +1,7 @@
 package havrobase;
 
+import java.io.IOException;
+
 /**
  * TODO: Edit this
  * <p/>
@@ -14,5 +16,9 @@ public class HAvroBaseException extends Throwable {
 
   public HAvroBaseException(String message) {
     super(message);
+  }
+
+  public HAvroBaseException(String s, IOException e) {
+    super(s, e);
   }
 }

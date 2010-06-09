@@ -3,24 +3,25 @@ package havrobase;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.io.BinaryDecoder;
+import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
+import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.commons.codec.binary.Hex;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableNotFoundException;
-import org.apache.hadoop.hbase.client.Get;
-import org.apache.hadoop.hbase.client.HBaseAdmin;
-import org.apache.hadoop.hbase.client.HTable;
-import org.apache.hadoop.hbase.client.HTablePool;
-import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.client.ResultScanner;
-import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.client.*;
 import org.apache.hadoop.hbase.io.hfile.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,8 +50,7 @@ public class HAB<T extends SpecificRecord> {
   private Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
   private Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();
 
-  // Typed return value with metadata
-
+  // Typed return value with metadata  
   static class Row<T extends SpecificRecord> {
     T value;
     byte[] row;
@@ -90,7 +90,7 @@ public class HAB<T extends SpecificRecord> {
       ResultScanner scanner = schemaTable.getScanner(scan);
       for (Result result : scanner) {
         String row = $_(result.getRow());
-        byte[] value = result.getValue(SCHEMA_COLUMN);
+        byte[] value = result.getValue(AVRO_FAMILY, SCHEMA_COLUMN);
         loadSchema(value, row);
       }
     } catch (IOException e) {
@@ -126,21 +126,97 @@ public class HAB<T extends SpecificRecord> {
     return rowResult;
   }
 
-  public void putRow(byte[] tableName, byte[] columnFamily, byte[] row, T value) throws HAvroBaseException {
+  public boolean putRow(byte[] tableName, byte[] columnFamily, byte[] row, T value) throws HAvroBaseException {
     HTable table = getTable(tableName, columnFamily);
+    long version;
     try {
-      Schema schema = value.getSchema();
-      String schemaKey;
-      synchronized (schema) {
-        schemaKey = hashCache.get(schema);
-        if (schemaKey == null) {
-          // Hash the schema, store it
-          
-        }
-      }
+      version = getVersion(columnFamily, row, table);
+    } catch (IOException e) {
+      throw new HAvroBaseException("Failed to retrieve version for row: " + $_(row), e);
     } finally {
       pool.putTable(table);
     }
+    return putRow(tableName, columnFamily, row, value, version);
+  }
+
+  public boolean putRow(byte[] tableName, byte[] columnFamily, byte[] row, T value, long version) throws HAvroBaseException {
+    HTable table = getTable(tableName, columnFamily);
+    try {
+      Schema schema = value.getSchema();
+      String schemaKey = storeSchema(schema);
+      byte[] bytes = serialize(value, schema);
+      Put put = new Put(row);
+      put.add(columnFamily, SCHEMA_COLUMN, $(schemaKey));
+      put.add(columnFamily, DATA_COLUMN, bytes);
+      put.add(columnFamily, VERSION_COLUMN, Bytes.toBytes(version + 1));
+      if (version == 0) {
+        table.put(put);
+        return true;
+      }
+      return table.checkAndPut(row, columnFamily, VERSION_COLUMN, Bytes.toBytes(version), put);
+    } catch (IOException e) {
+      throw new HAvroBaseException("Could not encode " + value, e);
+    } finally {
+      pool.putTable(table);
+    }
+  }
+
+  private byte[] serialize(T value, Schema schema) throws IOException {
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    BinaryEncoder be = new BinaryEncoder(baos);
+    SpecificDatumWriter<T> sdw = new SpecificDatumWriter(schema);
+    sdw.write(value, be);
+    byte[] bytes = baos.toByteArray();
+    return bytes;
+  }
+
+  private long getVersion(byte[] columnFamily, byte[] row, HTable table) throws IOException {
+    Get get = new Get(row);
+    get.addColumn(columnFamily, VERSION_COLUMN);
+    Result result = table.get(get);
+    byte[] versionB = result.getValue(columnFamily, VERSION_COLUMN);
+    long version;
+    if (versionB == null) {
+      version = 0;
+    } else {
+      version = Bytes.toLong(versionB);
+    }
+    return version;
+  }
+
+  private String storeSchema(Schema schema) throws HAvroBaseException {
+    String schemaKey;
+    synchronized (schema) {
+      schemaKey = hashCache.get(schema);
+      if (schemaKey == null) {
+        // Hash the schema, store it
+        MessageDigest md;
+        try {
+          md = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+          md = null;
+        }
+        String doc = schema.toString();
+        if (md == null) {
+          schemaKey = doc;
+        } else {
+          schemaKey = new String(Hex.encodeHex(md.digest(doc.getBytes())));
+        }
+        schemaCache.put(schemaKey, schema);
+        hashCache.put(schema, schemaKey);
+        Put put = new Put($(schemaKey));
+        put.add(AVRO_FAMILY, SCHEMA_COLUMN, $(doc));
+        HTable schemaTable = pool.getTable(SCHEMA_TABLE);
+        try {
+          schemaTable.put(put);
+        } catch (IOException e) {
+          throw new HAvroBaseException("Could not store schema " + doc, e);
+        } finally {
+          pool.putTable(schemaTable);
+        }
+      }
+    }
+    return schemaKey;
   }
 
 
@@ -202,8 +278,12 @@ public class HAB<T extends SpecificRecord> {
     return latest;
   }
 
-  private String $_(byte[] schemaKey) {
-    return Bytes.toString(schemaKey);
+  private byte[] $(String s) {
+    return Bytes.toBytes(s);
+  }
+
+  private String $_(byte[] s) {
+    return Bytes.toString(s);
   }
 
   private HTable getTable(byte[] tableName, byte[] columnFamily) throws HAvroBaseException {
