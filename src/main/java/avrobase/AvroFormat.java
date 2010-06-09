@@ -9,5 +9,5 @@ package avrobase;
 */
 public enum AvroFormat {
   BINARY,
-  JSON;
+  JSON
 }

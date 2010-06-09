@@ -3,7 +3,7 @@ package avrobase;
 import java.io.IOException;
 
 /**
- * TODO: Edit this
+ * All checked exceptions in the system are wrapped by this one.
  * <p/>
  * User: sam
  * Date: Jun 8, 2010
