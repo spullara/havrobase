@@ -1,10 +1,13 @@
 package havrobase;
 
+import avrobase.AvroBase;
+import avrobase.AvroBaseException;
+import avrobase.AvroBaseFactory;
+import avrobase.AvroFormat;
+import avrobase.Row;
 import bagcheck.GenderType;
 import bagcheck.User;
 import com.google.inject.Binder;
-import com.google.inject.Guice;
-import com.google.inject.Injector;
 import com.google.inject.Module;
 import junit.framework.TestCase;
 import org.apache.avro.util.Utf8;
@@ -21,7 +24,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * TODO: Edit this
+ * Test all the public interfaces to the HAvroBase
  * <p/>
  * User: sam
  * Date: Jun 8, 2010
@@ -43,19 +46,16 @@ public class HABTest extends TestCase {
     }
   }
 
-  public void testNoRow() throws HAvroBaseException {
-    Injector injector = Guice.createInjector(new HABModule());
-    HAB instance = injector.getInstance(HAB.class);
-    byte[] TABLE = Bytes.toBytes("test_user");
-    HAB.Row<User> row = instance.getRow(HABTest.TABLE, COLUMN_FAMILY, Bytes.toBytes("lukew"));
+  public void testNoRow() throws AvroBaseException {
+    AvroBase<User> instance = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
+    Row<User> row = instance.get(Bytes.toBytes("lukew"));
     assertEquals(null, row.value);
     assertEquals(-1, row.version);
     assertEquals(Long.MAX_VALUE, row.timestamp);
   }
 
-  public void testSave() throws HAvroBaseException {
-    Injector injector = Guice.createInjector(new HABModule());
-    HAB<User> userHAB = injector.getInstance(HAB.class);
+  public void testSave() throws AvroBaseException {
+    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");
@@ -68,14 +68,13 @@ public class HABTest extends TestCase {
     saved.location = $("Los Altos, CA");
     saved.password = ByteBuffer.wrap($("").getBytes());
     byte[] row = Bytes.toBytes("spullara");
-    userHAB.putRow(TABLE, COLUMN_FAMILY, row, saved);
-    HAB.Row<User> loaded = userHAB.getRow(TABLE, COLUMN_FAMILY, row);
+    userHAB.put(row, saved);
+    Row<User> loaded = userHAB.get(row);
     assertEquals(saved, loaded.value);
   }
 
-  public void testSaveFail() throws HAvroBaseException {
-    Injector injector = Guice.createInjector(new HABModule());
-    HAB<User> userHAB = injector.getInstance(HAB.class);
+  public void testSaveFail() throws AvroBaseException {
+    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");
@@ -88,13 +87,11 @@ public class HABTest extends TestCase {
     saved.location = $("Los Altos, CA");
     saved.password = ByteBuffer.wrap($("").getBytes());
     byte[] row = Bytes.toBytes("spullara");
-    assertFalse(userHAB.putRow(TABLE, COLUMN_FAMILY, row, saved, -1));
+    assertFalse(userHAB.put(row, saved, -1));
   }
 
-  public void testSaveJsonFormat() throws HAvroBaseException, IOException {
-    Injector injector = Guice.createInjector(new HABModule());
-    HAB<User> userHAB = injector.getInstance(HAB.class);
-    userHAB.setFormat(HAB.AvroFormat.JSON);
+  public void testSaveJsonFormat() throws AvroBaseException, IOException {
+    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.JSON);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");
@@ -107,8 +104,8 @@ public class HABTest extends TestCase {
     saved.location = $("Los Altos, CA");
     saved.password = ByteBuffer.wrap($("").getBytes());
     byte[] row = Bytes.toBytes("spullara");
-    userHAB.putRow(TABLE, COLUMN_FAMILY, row, saved);
-    HAB.Row<User> loaded = userHAB.getRow(TABLE, COLUMN_FAMILY, row);
+    userHAB.put(row, saved);
+    Row<User> loaded = userHAB.get(row);
     assertEquals(saved, loaded.value);
 
     HTablePool pool = new HTablePool();
@@ -121,6 +118,16 @@ public class HABTest extends TestCase {
       assertTrue(Bytes.toString(result.getValue(COLUMN_FAMILY, DATA)).startsWith("{"));
     } finally {
       pool.putTable(table);
+    }
+  }
+
+  public void testScan() throws AvroBaseException {
+    testSave();
+    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
+    byte[] row = Bytes.toBytes("spullara");
+    Row<User> loaded = userHAB.get(row);
+    for (Row<User> user : userHAB.scan(row, row)) {
+      assertEquals(loaded.value, user.value);
     }
   }
 
