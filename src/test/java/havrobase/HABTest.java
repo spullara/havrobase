@@ -10,6 +10,9 @@ import bagcheck.User;
 import com.google.inject.Binder;
 import com.google.inject.Module;
 import com.google.inject.name.Names;
+import org.apache.avro.Schema;
+import org.apache.avro.io.JsonDecoder;
+import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.MasterNotRunningException;
@@ -23,6 +26,7 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.*;
@@ -69,9 +73,7 @@ public class HABTest {
       HBaseAdmin admin = new HBaseAdmin(new HBaseConfiguration());
       admin.disableTable(TABLE);
       admin.deleteTable(TABLE);
-      System.out.println("User table deleted");
     } catch (IOException e) {
-      System.out.println("User table not present");
     }
   }
 
@@ -80,9 +82,7 @@ public class HABTest {
       HBaseAdmin admin = new HBaseAdmin(new HBaseConfiguration());
       admin.disableTable(SCHEMA_TABLE);
       admin.deleteTable(SCHEMA_TABLE);
-      System.out.println("Schema table deleted");
     } catch (IOException e) {
-      System.out.println("Schema table not present");
     }
   }
 
@@ -145,6 +145,7 @@ public class HABTest {
     saved.title = $("Engineer");
     saved.image = $("http://farm1.static.flickr.com/1/buddyicons/32354567@N00.jpg");
     saved.location = $("Los Altos, CA");
+    saved.mobile = $("4155551212");
     saved.password = ByteBuffer.wrap($("").getBytes());
     byte[] row = Bytes.toBytes("spullara");
     userHAB.put(row, saved);
@@ -165,13 +166,50 @@ public class HABTest {
   }
 
   @Test
-  public void testScan() throws AvroBaseException {
-    testSave();
+  public void testScan() throws AvroBaseException, IOException {
+    testSaveJsonFormat();
     AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
     byte[] row = Bytes.toBytes("spullara");
     Row<User> loaded = userHAB.get(row);
     for (Row<User> user : userHAB.scan(row, row)) {
       assertEquals(loaded, user);
+    }
+  }
+
+  @Test
+  public void testSchemolution() throws AvroBaseException, IOException {
+    testSaveJsonFormat();
+    byte[] row = Bytes.toBytes("spullara");
+    HTablePool pool = new HTablePool();
+    HTable userTable = pool.getTable(TABLE);
+    try {
+      Get get = new Get(row);
+      Result userRow = userTable.get(get);
+      byte[] schemaKey = userRow.getValue(COLUMN_FAMILY, Bytes.toBytes("s"));
+      HTable schemaTable = pool.getTable(SCHEMA_TABLE);
+      Schema actual;
+      try {
+        Result schemaRow = schemaTable.get(new Get(schemaKey));
+        actual = Schema.parse(Bytes.toString(schemaRow.getValue(Bytes.toBytes("avro"), Bytes.toBytes("s"))));
+      } finally {
+        pool.putTable(schemaTable);
+      }
+      JsonDecoder jd = new JsonDecoder(actual, Bytes.toString(userRow.getValue(COLUMN_FAMILY, Bytes.toBytes("d"))));
+
+      // Read it as a slightly different schema lacking a field
+      InputStream stream = getClass().getResourceAsStream("/User2.json");
+      Schema expected = Schema.parse(stream);
+
+      {
+        SpecificDatumReader<User> sdr = new SpecificDatumReader<User>();
+        sdr.setSchema(actual);
+        sdr.setExpected(expected);
+        User loaded = sdr.read(null, jd);
+        assertEquals("Sam", loaded.firstName.toString());
+        assertEquals(null, loaded.mobile);
+      }
+    } finally {
+      pool.putTable(userTable);
     }
   }
 
