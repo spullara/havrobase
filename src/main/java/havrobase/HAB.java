@@ -4,7 +4,6 @@ import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
@@ -58,6 +57,13 @@ public class HAB<T extends SpecificRecord> {
     long version = -1;
   }
 
+  /**
+   * Load the schema map on init and then keep it up to date from then on. The HBase
+   * connectivity is provided usually via Guice.
+   * @param pool
+   * @param admin
+   * @throws HAvroBaseException
+   */
   @Inject
   public HAB(HTablePool pool, HBaseAdmin admin) throws HAvroBaseException {
     this.pool = pool;
@@ -100,6 +106,7 @@ public class HAB<T extends SpecificRecord> {
     }
   }
 
+  // Load a schema from the schema table
   private Schema loadSchema(byte[] value, String row) throws IOException {
     Schema schema = Schema.parse(new ByteArrayInputStream(value));
     schemaCache.put(row, schema);
@@ -164,10 +171,9 @@ public class HAB<T extends SpecificRecord> {
   private byte[] serialize(T value, Schema schema) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     BinaryEncoder be = new BinaryEncoder(baos);
-    SpecificDatumWriter<T> sdw = new SpecificDatumWriter(schema);
+    SpecificDatumWriter<T> sdw = new SpecificDatumWriter<T>(schema);
     sdw.write(value, be);
-    byte[] bytes = baos.toByteArray();
-    return bytes;
+    return baos.toByteArray();
   }
 
   private long getVersion(byte[] columnFamily, byte[] row, HTable table) throws IOException {
