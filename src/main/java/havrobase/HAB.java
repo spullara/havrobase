@@ -2,9 +2,12 @@ package havrobase;
 
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
-import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
+import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.JsonDecoder;
+import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
@@ -12,7 +15,14 @@ import org.apache.commons.codec.binary.Hex;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableNotFoundException;
-import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.client.Get;
+import org.apache.hadoop.hbase.client.HBaseAdmin;
+import org.apache.hadoop.hbase.client.HTable;
+import org.apache.hadoop.hbase.client.HTablePool;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.io.hfile.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 
@@ -39,17 +49,32 @@ public class HAB<T extends SpecificRecord> {
   private HBaseAdmin admin;
 
   // HBase Constants
-  public static final byte[] VERSION_COLUMN = Bytes.toBytes("v");
-  public static final byte[] SCHEMA_COLUMN = Bytes.toBytes("s");
-  public static final byte[] DATA_COLUMN = Bytes.toBytes("d");
-  public static final byte[] SCHEMA_TABLE = Bytes.toBytes("schema");
-  public static final byte[] AVRO_FAMILY = Bytes.toBytes("avro");
+  public static final byte[] VERSION_COLUMN = $("v");
+  public static final byte[] SCHEMA_COLUMN = $("s");
+  public static final byte[] DATA_COLUMN = $("d");
+  public static final byte[] SCHEMA_TABLE = $("schema");
+  public static final byte[] AVRO_FAMILY = $("avro");
+  public static final byte[] FORMAT_COLUMN = $("f");
+
+  // Format
+
+  public enum AvroFormat {
+    BINARY,
+    JSON
+  }
+
+  private AvroFormat format = AvroFormat.BINARY;
+
+  public void setFormat(AvroFormat format) {
+    this.format = format;
+  }
 
   // Caching
   private Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
   private Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();
 
   // Typed return value with metadata  
+
   static class Row<T extends SpecificRecord> {
     T value;
     byte[] row;
@@ -60,6 +85,7 @@ public class HAB<T extends SpecificRecord> {
   /**
    * Load the schema map on init and then keep it up to date from then on. The HBase
    * connectivity is provided usually via Guice.
+   *
    * @param pool
    * @param admin
    * @throws HAvroBaseException
@@ -107,6 +133,7 @@ public class HAB<T extends SpecificRecord> {
   }
 
   // Load a schema from the schema table
+
   private Schema loadSchema(byte[] value, String row) throws IOException {
     Schema schema = Schema.parse(new ByteArrayInputStream(value));
     schemaCache.put(row, schema);
@@ -123,7 +150,12 @@ public class HAB<T extends SpecificRecord> {
       byte[] latest = getMetaData(rowResult, result, columnFamily);
       if (latest != null) {
         Schema schema = loadSchema(result, row, columnFamily);
-        rowResult.value = readValue(latest, schema);
+        byte[] formatB = result.getValue(columnFamily, FORMAT_COLUMN);
+        AvroFormat format = AvroFormat.BINARY;
+        if (formatB != null) {
+          format = AvroFormat.values()[Bytes.toInt(formatB)];
+        }
+        rowResult.value = readValue(latest, schema, format);
       }
     } catch (IOException e) {
       throw new HAvroBaseException(e);
@@ -151,11 +183,12 @@ public class HAB<T extends SpecificRecord> {
     try {
       Schema schema = value.getSchema();
       String schemaKey = storeSchema(schema);
-      byte[] bytes = serialize(value, schema);
+      byte[] bytes = serialize(value, schema, format);
       Put put = new Put(row);
       put.add(columnFamily, SCHEMA_COLUMN, $(schemaKey));
       put.add(columnFamily, DATA_COLUMN, bytes);
       put.add(columnFamily, VERSION_COLUMN, Bytes.toBytes(version + 1));
+      put.add(columnFamily, FORMAT_COLUMN, Bytes.toBytes(format.ordinal()));
       if (version == 0) {
         table.put(put);
         return true;
@@ -168,11 +201,21 @@ public class HAB<T extends SpecificRecord> {
     }
   }
 
-  private byte[] serialize(T value, Schema schema) throws IOException {
+  private byte[] serialize(T value, Schema schema, AvroFormat format) throws IOException {
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    BinaryEncoder be = new BinaryEncoder(baos);
+    Encoder be;
+    switch (format) {
+      case JSON:
+        be = new JsonEncoder(schema, baos);
+        break;
+      case BINARY:
+      default:
+        be = new BinaryEncoder(baos);
+        break;
+    }
     SpecificDatumWriter<T> sdw = new SpecificDatumWriter<T>(schema);
     sdw.write(value, be);
+    be.flush();
     return baos.toByteArray();
   }
 
@@ -231,14 +274,24 @@ public class HAB<T extends SpecificRecord> {
     get.addColumn(columnFamily, DATA_COLUMN);
     get.addColumn(columnFamily, SCHEMA_COLUMN);
     get.addColumn(columnFamily, VERSION_COLUMN);
+    get.addColumn(columnFamily, FORMAT_COLUMN);
     return table.get(get);
   }
 
-  private T readValue(byte[] latest, Schema schema) throws IOException {
-    DecoderFactory factory = new DecoderFactory();
-    BinaryDecoder bd = factory.createBinaryDecoder(new ByteArrayInputStream(latest), null);
+  private T readValue(byte[] latest, Schema schema, AvroFormat format) throws IOException {
+    Decoder d;
+    switch (format) {
+      case JSON:
+        d = new JsonDecoder(schema, new ByteArrayInputStream(latest));
+        break;
+      case BINARY:
+      default:
+        DecoderFactory factory = new DecoderFactory();
+        d = factory.createBinaryDecoder(new ByteArrayInputStream(latest), null);
+        break;
+    }
     SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(schema);
-    return sdr.read(null, bd);
+    return sdr.read(null, d);
   }
 
   private Schema loadSchema(Result result, byte[] row, byte[] columnFamily) throws HAvroBaseException, IOException {
@@ -284,11 +337,11 @@ public class HAB<T extends SpecificRecord> {
     return latest;
   }
 
-  private byte[] $(String s) {
+  private static byte[] $(String s) {
     return Bytes.toBytes(s);
   }
 
-  private String $_(byte[] s) {
+  private static String $_(byte[] s) {
     return Bytes.toString(s);
   }
 

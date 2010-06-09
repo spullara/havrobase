@@ -10,10 +10,14 @@ import junit.framework.TestCase;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.MasterNotRunningException;
+import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
+import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.HTablePool;
+import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -85,6 +89,39 @@ public class HABTest extends TestCase {
     saved.password = ByteBuffer.wrap($("").getBytes());
     byte[] row = Bytes.toBytes("spullara");
     assertFalse(userHAB.putRow(TABLE, COLUMN_FAMILY, row, saved, -1));
+  }
+
+  public void testSaveJsonFormat() throws HAvroBaseException, IOException {
+    Injector injector = Guice.createInjector(new HABModule());
+    HAB<User> userHAB = injector.getInstance(HAB.class);
+    userHAB.setFormat(HAB.AvroFormat.JSON);
+    User saved = new User();
+    saved.firstName = $("Sam");
+    saved.lastName = $("Pullara");
+    saved.birthday = $("1212");
+    saved.gender = GenderType.MALE;
+    saved.email = $("spullara@yahoo.com");
+    saved.description = $("CTO of RightTime, Inc. and one of the founders of BagCheck");
+    saved.title = $("Engineer");
+    saved.image = $("http://farm1.static.flickr.com/1/buddyicons/32354567@N00.jpg");
+    saved.location = $("Los Altos, CA");
+    saved.password = ByteBuffer.wrap($("").getBytes());
+    byte[] row = Bytes.toBytes("spullara");
+    userHAB.putRow(TABLE, COLUMN_FAMILY, row, saved);
+    HAB.Row<User> loaded = userHAB.getRow(TABLE, COLUMN_FAMILY, row);
+    assertEquals(saved, loaded.value);
+
+    HTablePool pool = new HTablePool();
+    HTable table = pool.getTable(TABLE);
+    try {
+      Get get = new Get(row);
+      byte[] DATA = Bytes.toBytes("d");
+      get.addColumn(COLUMN_FAMILY, DATA);
+      Result result = table.get(get);
+      assertTrue(Bytes.toString(result.getValue(COLUMN_FAMILY, DATA)).startsWith("{"));
+    } finally {
+      pool.putTable(table);
+    }
   }
 
   private Utf8 $(String value) {
