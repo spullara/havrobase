@@ -97,7 +97,6 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
    * @param admin
    * @throws AvroBaseException
    */
-  @Inject
   public void init() throws AvroBaseException {
     HTable schemaTable;
     try {
