@@ -19,13 +19,12 @@ public class AvroBaseFactory {
     Injector injector = Guice.createInjector(module);
     AvroBase base = injector.createChildInjector(new Module() {
       @Override
-      public void configure(Binder binder) {
+      public void configure(Binder binder) {        
         binder.bind(byte[].class).annotatedWith(Names.named("table")).toInstance(table);
         binder.bind(byte[].class).annotatedWith(Names.named("family")).toInstance(family);
         binder.bind(AvroFormat.class).toInstance(format);
       }
     }).getInstance(clazz);
-    base.init();
     return base;
   }
 }

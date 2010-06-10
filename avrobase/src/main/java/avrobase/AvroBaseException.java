@@ -9,7 +9,7 @@ import java.io.IOException;
  * Date: Jun 8, 2010
  * Time: 5:27:43 PM
  */
-public class AvroBaseException extends Throwable {
+public class AvroBaseException extends RuntimeException {
   public AvroBaseException(Throwable cause) {
     super(cause);
   }

@@ -20,18 +20,16 @@ import static org.junit.Assert.assertTrue;
 public class AvroBaseFactoryTest {
   public static class TestAvroBase<T extends SpecificRecord> implements AvroBase<T> {
 
-    @Inject
-    @Named("table")
-    public byte[] table;
-
-    @Inject
-    @Named("family")
-    public byte[] family;
-    
     public boolean inited;
+    private byte[] table;
+    private byte[] family;
+    private AvroFormat format;
 
-    @Override
-    public void init() throws AvroBaseException {
+    @Inject
+    public TestAvroBase(@Named("table") byte[] table, @Named("family") byte[] family, AvroFormat format) {
+      this.table = table;
+      this.family = family;
+      this.format = format;
       inited = true;
     }
 
@@ -66,6 +64,7 @@ public class AvroBaseFactoryTest {
     }, TestAvroBase.class, table, family, AvroFormat.JSON);
     assertEquals("table", new String(base.table));
     assertEquals("family", new String(base.family));
+    assertEquals(AvroFormat.JSON, base.format);
     assertTrue(base.inited);
   }
 }

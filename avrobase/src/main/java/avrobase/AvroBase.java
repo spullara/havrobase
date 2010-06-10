@@ -11,11 +11,6 @@ import org.apache.avro.specific.SpecificRecord;
  */
 public interface AvroBase<T extends SpecificRecord> {
   /**
-   * Initialize your avrobase implementation
-   */
-  void init() throws AvroBaseException;
-
-  /**
    * Return a single row
    * @param row
    * @return
