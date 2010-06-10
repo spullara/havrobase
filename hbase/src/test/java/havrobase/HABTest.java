@@ -177,7 +177,7 @@ public class HABTest {
   }
 
   @Test
-  public void testSchemolution() throws AvroBaseException, IOException {
+  public void testSchemolution() /* will not be televised */ throws AvroBaseException, IOException {
     testSaveJsonFormat();
     byte[] row = Bytes.toBytes("spullara");
     HTablePool pool = new HTablePool();
