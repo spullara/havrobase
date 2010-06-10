@@ -6,7 +6,6 @@ import avrobase.AvroFormat;
 import avrobase.Row;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
-import com.sun.tools.javac.resources.version;
 import org.apache.avro.Schema;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;

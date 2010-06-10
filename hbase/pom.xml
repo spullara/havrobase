@@ -83,7 +83,6 @@
           </execution>
         </executions>
       </plugin>
-
       <plugin>
         <groupId>com.thoughtworks.paranamer</groupId>
         <artifactId>paranamer-maven-plugin</artifactId>
@@ -108,26 +107,6 @@
           <target>1.6</target>
         </configuration>
       </plugin>
-
-      <plugin>
-        <artifactId>maven-resources-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>copy-resources</id>
-            <phase>process-test-resources</phase>
-            <goals>
-              <goal>resources</goal>
-            </goals>
-            <configuration>
-              <outputDirectory>${basedir}/target/test-classes</outputDirectory>
-              <filters>
-                <filter>**/*.json</filter>
-              </filters>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>
-
     </plugins>
   </build>
 </project>
