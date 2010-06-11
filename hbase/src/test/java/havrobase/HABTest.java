@@ -213,6 +213,13 @@ public class HABTest {
     }
   }
 
+  @Test
+  public void testAddFamily() {
+    testSave();
+    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, "profile2".getBytes(), AvroFormat.JSON);
+    Row<User> row = userHAB.get("spullara".getBytes());
+  }
+
   private Utf8 $(String value) {
     return new Utf8(value);
   }

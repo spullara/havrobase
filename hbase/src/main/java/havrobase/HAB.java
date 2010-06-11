@@ -98,7 +98,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
       schemaTable = pool.getTable(this.schemaName);
     } catch (RuntimeException e) {
       if (e.getCause() instanceof TableNotFoundException) {
-        schemaTable = createHAvroBase();
+        schemaTable = createSchemaTable();
       } else {
         throw new AvroBaseException(e.getCause());
       }
@@ -109,6 +109,23 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
       throw new AvroBaseException(e);
     } finally {
       pool.putTable(schemaTable);
+    }
+    HTable table = getTable(tableName, family);
+    try {
+      if (table.getTableDescriptor().getFamily(family) == null) {
+        HColumnDescriptor familyDesc = getColumnDesc(family);
+        try {
+          admin.disableTable(tableName);
+          admin.addColumn(tableName, familyDesc);
+          admin.enableTable(tableName);
+        } catch (IOException e) {
+          throw new AvroBaseException(e);
+        }
+      }
+    } catch (IOException e) {
+      throw new AvroBaseException(e);
+    } finally {
+      pool.putTable(table);
     }
   }
 
@@ -128,7 +145,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
   // Given a table and family, create a corresponding table and
   // family with hbase.
 
-  private HTable createHAvroBase() throws AvroBaseException {
+  private HTable createSchemaTable() throws AvroBaseException {
     HTable schemaTable;
     HColumnDescriptor family = new HColumnDescriptor(AVRO_FAMILY);
     family.setMaxVersions(1);
@@ -438,10 +455,7 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
       table = pool.getTable(tableName);
     } catch (RuntimeException e) {
       if (e.getCause() instanceof TableNotFoundException) {
-        HColumnDescriptor family = new HColumnDescriptor(columnFamily);
-        family.setMaxVersions(1);
-        family.setCompressionType(Compression.Algorithm.LZO);
-        family.setInMemory(false);
+        HColumnDescriptor family = getColumnDesc(columnFamily);
         HTableDescriptor tableDesc = new HTableDescriptor(tableName);
         tableDesc.addFamily(family);
         try {
@@ -449,12 +463,20 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
         } catch (IOException e1) {
           throw new AvroBaseException(e1);
         }
-        table = pool.getTable(tableName);
       } else {
         throw new AvroBaseException(e.getCause());
       }
+      table = pool.getTable(tableName);
     }
     return table;
+  }
+
+  private HColumnDescriptor getColumnDesc(byte[] columnFamily) {
+    HColumnDescriptor family = new HColumnDescriptor(columnFamily);
+    family.setMaxVersions(1);
+    family.setCompressionType(Compression.Algorithm.LZO);
+    family.setInMemory(false);
+    return family;
   }
 
   // Inlinable converters
