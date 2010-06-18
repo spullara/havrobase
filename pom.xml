@@ -8,6 +8,7 @@
   <modules>
     <module>avrobase</module>
     <module>hbase</module>
+    <module>mysql</module>
   </modules>
   <packaging>pom</packaging>
 

@@ -18,7 +18,7 @@ public class AvroBaseException extends RuntimeException {
     super(message);
   }
 
-  public AvroBaseException(String s, IOException e) {
+  public AvroBaseException(String s, Throwable e) {
     super(s, e);
   }
 }
