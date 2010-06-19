@@ -9,6 +9,8 @@
     <module>avrobase</module>
     <module>hbase</module>
     <module>mysql</module>
+    <module>file</module>
+    <module>cassandra</module>
   </modules>
   <packaging>pom</packaging>
 
