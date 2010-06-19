@@ -17,10 +17,9 @@ import org.junit.Test;
 import javax.sql.DataSource;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.UUID;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * TODO: Edit this
@@ -66,6 +65,29 @@ public class MABTest {
     saved.password = ByteBuffer.wrap($("").getBytes());
     byte[] row = "spullara".getBytes();
     userHAB.put(row, saved);
+    Row<User> loaded = userHAB.get(row);
+    assertTrue(loaded != null);
+    assertEquals(saved, loaded.value);
+    userHAB.put(row, saved, loaded.version);
+    assertFalse(userHAB.put(row, saved, loaded.version));
+  }
+
+  @Test
+  public void testInsert() throws AvroBaseException {
+    AvroBase<User> userHAB = getMAB();
+    User saved = new User();
+    saved.firstName = $("Sam");
+    saved.lastName = $("Pullara");
+    saved.birthday = $("1212");
+    saved.gender = GenderType.MALE;
+    saved.email = $("spullara@yahoo.com");
+    saved.description = $("CTO of RightTime, Inc. and one of the founders of BagCheck");
+    saved.title = $("Engineer");
+    saved.image = $("http://farm1.static.flickr.com/1/buddyicons/32354567@N00.jpg");
+    saved.location = $("Los Altos, CA");
+    saved.password = ByteBuffer.wrap($("").getBytes());
+    byte[] row = UUID.randomUUID().toString().getBytes();
+    userHAB.put(row, saved, 0);
     Row<User> loaded = userHAB.get(row);
     assertTrue(loaded != null);
     assertEquals(saved, loaded.value);

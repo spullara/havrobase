@@ -85,7 +85,7 @@ public class MAB<T extends SpecificRecord> implements AvroBase<T> {
           if (!tables.next()) {
             // Create the table
             Statement statement = connection.createStatement();
-            statement.executeUpdate("CREATE TABLE " + schemaTableName + " ( id int primary key auto_increment, hash varbinary(256) not null, json mediumblob not null )");
+            statement.executeUpdate("CREATE TABLE " + schemaTableName + " ( id integer primary key auto_increment, hash varbinary(256) not null, json mediumblob not null )");
             statement.close();
           } else {
             // Load schemas
@@ -347,7 +347,8 @@ public class MAB<T extends SpecificRecord> implements AvroBase<T> {
     final Integer finalId = id;
     if (version == 0) {
       try {
-        int updated = new Update("INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?,version = version + 1,?,?)") {
+        int updated = new Update("INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?," +
+                "1,?,?)") {
           void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
             ps.setBytes(1, row);
             ps.setInt(2, finalId);
@@ -357,7 +358,6 @@ public class MAB<T extends SpecificRecord> implements AvroBase<T> {
             } catch (IOException e) {
               throw new AvroBaseException("Failed to serialize value", e);
             }
-            ps.setLong(5, version);
           }
         }.insert();
         if (updated == 0) {
