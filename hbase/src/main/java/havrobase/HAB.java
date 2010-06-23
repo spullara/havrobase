@@ -1,22 +1,13 @@
 package havrobase;
 
-import avrobase.AvroBase;
 import avrobase.AvroBaseException;
+import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
 import com.google.inject.Inject;
 import com.google.inject.name.Named;
 import org.apache.avro.Schema;
-import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.Decoder;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.JsonDecoder;
-import org.apache.avro.io.JsonEncoder;
-import org.apache.avro.specific.SpecificDatumReader;
-import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
-import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
@@ -32,15 +23,10 @@ import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.io.hfile.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * HAvroBase client.
@@ -49,7 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Date: Jun 8, 2010
  * Time: 5:13:35 PM
  */
-public class HAB<T extends SpecificRecord> implements AvroBase<T> {
+public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
 
   // HBase Constants
   public static final byte[] VERSION_COLUMN = $("v");
@@ -59,14 +45,11 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
   public static final byte[] FORMAT_COLUMN = $("f");
 
   // Cache the schemas with a two-way lookup
-  private Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
-  private Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();
   private HTablePool pool;
   private HBaseAdmin admin;
   private byte[] tableName;
   private byte[] family;
   private byte[] schemaName;
-  private AvroFormat format;
 
   // Typed return value with metadata  
 
@@ -87,12 +70,12 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
           @Named("schema") byte[] schemaName,
           AvroFormat format
   ) throws AvroBaseException {
+    super(format);
     this.pool = pool;
     this.admin = admin;
     this.tableName = tableName;
     this.family = family;
     this.schemaName = schemaName;
-    this.format = format;
     HTable schemaTable;
     try {
       schemaTable = pool.getTable(this.schemaName);
@@ -160,15 +143,6 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     }
     schemaTable = pool.getTable(schemaName);
     return schemaTable;
-  }
-
-  // Load a schema from the schema table
-
-  private Schema loadSchema(byte[] value, String row) throws IOException {
-    Schema schema = Schema.parse(new ByteArrayInputStream(value));
-    schemaCache.put(row, schema);
-    hashCache.put(schema, row);
-    return schema;
   }
 
   @Override
@@ -315,28 +289,6 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     }
   }
 
-  // Serialize the Avro instance using its schema and the
-  // format set for this avrobase
-
-  private byte[] serialize(T value) throws IOException {
-    Schema schema = value.getSchema();
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    Encoder be;
-    switch (format) {
-      case JSON:
-        be = new JsonEncoder(schema, baos);
-        break;
-      case BINARY:
-      default:
-        be = new BinaryEncoder(baos);
-        break;
-    }
-    SpecificDatumWriter<T> sdw = new SpecificDatumWriter<T>(schema);
-    sdw.write(value, be);
-    be.flush();
-    return baos.toByteArray();
-  }
-
   // Pull the version out of the version column. Version 0 means that it does not exist
   // in the hbase row
 
@@ -362,20 +314,8 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
       schemaKey = hashCache.get(schema);
       if (schemaKey == null) {
         // Hash the schema, store it
-        MessageDigest md;
-        try {
-          md = MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException e) {
-          md = null;
-        }
         String doc = schema.toString();
-        if (md == null) {
-          schemaKey = doc;
-        } else {
-          schemaKey = new String(Hex.encodeHex(md.digest(doc.getBytes())));
-        }
-        schemaCache.put(schemaKey, schema);
-        hashCache.put(schema, schemaKey);
+        schemaKey = createSchemaKey(schema, doc);
         Put put = new Put($(schemaKey));
         put.add(AVRO_FAMILY, SCHEMA_COLUMN, $(doc));
         HTable schemaTable = pool.getTable(schemaName);
@@ -400,25 +340,6 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     get.addColumn(columnFamily, VERSION_COLUMN);
     get.addColumn(columnFamily, FORMAT_COLUMN);
     return table.get(get);
-  }
-
-  // Read the avro serialized data using the specified schema and format
-  // in the hbase row
-
-  private T readValue(byte[] latest, Schema schema, AvroFormat format) throws IOException {
-    Decoder d;
-    switch (format) {
-      case JSON:
-        d = new JsonDecoder(schema, new ByteArrayInputStream(latest));
-        break;
-      case BINARY:
-      default:
-        DecoderFactory factory = new DecoderFactory();
-        d = factory.createBinaryDecoder(new ByteArrayInputStream(latest), null);
-        break;
-    }
-    SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(schema);
-    return sdr.read(null, d);
   }
 
   // Load a schema from the current hbase row
@@ -477,16 +398,6 @@ public class HAB<T extends SpecificRecord> implements AvroBase<T> {
     family.setCompressionType(Compression.Algorithm.LZO);
     family.setInMemory(false);
     return family;
-  }
-
-  // Inlinable converters
-
-  private static byte[] $(String s) {
-    return Bytes.toBytes(s);
-  }
-
-  private static String $_(byte[] s) {
-    return Bytes.toString(s);
   }
 
 }

@@ -28,6 +28,13 @@
       <scope>compile</scope>
     </dependency>
 
+    <!-- Hex -->
+    <dependency>
+      <groupId>commons-codec</groupId>
+      <artifactId>commons-codec</artifactId>
+      <version>1.4</version>
+    </dependency>
+    
     <!-- Guice -->
     <dependency>
       <groupId>com.google.code.guice</groupId>

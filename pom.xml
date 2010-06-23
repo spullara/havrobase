@@ -11,6 +11,7 @@
     <module>mysql</module>
     <module>file</module>
     <module>cassandra</module>
+    <module>memcached</module>
   </modules>
   <packaging>pom</packaging>
 
