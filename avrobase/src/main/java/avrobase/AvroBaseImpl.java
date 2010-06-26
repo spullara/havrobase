@@ -64,6 +64,16 @@ public abstract class AvroBaseImpl<T extends SpecificRecord> implements AvroBase
     this.format = format;
   }
 
+  /**
+   * Given a solr url this constructor will pull the schema and use that to index
+   * values when the index function is called. The search method then can query the
+   * indexed objects and return them. The Solr configuration is the single source
+   * of configuration for which fields are indexed.  The uniquekey has to be a string
+   * converted via utf-8 from the row id.
+   * @param format
+   * @param solrURL
+   * @throws AvroBaseException
+   */
   public AvroBaseImpl(AvroFormat format, String solrURL) throws AvroBaseException {
     this(format);
     if (solrURL != null) {
@@ -101,6 +111,15 @@ public abstract class AvroBaseImpl<T extends SpecificRecord> implements AvroBase
     }
   }
 
+  /**
+   * Query the solr instance and return matching documents in score order. Should we
+   * return only stored fields or load them automatically?
+   * @param query
+   * @param start
+   * @param rows
+   * @return
+   * @throws AvroBaseException
+   */
   @Override
   public Iterable<Row<T>> search(String query, int start, int rows) throws AvroBaseException {
     if (solrServer == null) {
