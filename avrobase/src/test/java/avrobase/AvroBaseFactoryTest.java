@@ -51,6 +51,11 @@ public class AvroBaseFactoryTest {
     public Iterable<Row<T>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
       return null;
     }
+
+    @Override
+    public Iterable<Row<T>> search(String query, int start, int rows) throws AvroBaseException {
+      return null;
+    }
   }
 
   @Test

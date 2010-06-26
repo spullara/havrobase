@@ -57,6 +57,7 @@ public class HABTest {
     @Override
     public void configure(Binder binder) {
       binder.bind(byte[].class).annotatedWith(Names.named("schema")).toInstance(SCHEMA_TABLE);
+      binder.bind(String.class).annotatedWith(Names.named("solr")).toInstance("http://localhost:8983/solr");
       binder.bind(HTablePool.class).toInstance(new HTablePool());
       binder.bind(HBaseAdmin.class).toInstance(admin);
     }

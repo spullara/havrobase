@@ -5,6 +5,7 @@ import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
 import com.google.inject.Inject;
+import com.google.inject.internal.Nullable;
 import com.google.inject.name.Named;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
@@ -68,9 +69,10 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
           @Named("table") byte[] tableName,
           @Named("family") byte[] family,
           @Named("schema") byte[] schemaName,
+          @Named("solr") @Nullable String solrURL,
           AvroFormat format
   ) throws AvroBaseException {
-    super(format);
+    super(format, solrURL);
     this.pool = pool;
     this.admin = admin;
     this.tableName = tableName;
@@ -167,6 +169,7 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
         // FIXME: Spin until success, last one wins. Provably dangerous?
         version = getVersion(family, row, table);
       } while (!put(row, value, version));
+      index(row, value);      
     } catch (IOException e) {
       throw new AvroBaseException("Failed to retrieve version for row: " + $_(row), e);
     } finally {
@@ -190,7 +193,11 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
         table.put(put);
         return true;
       }
-      return table.checkAndPut(row, family, VERSION_COLUMN, Bytes.toBytes(version), put);
+      boolean success = table.checkAndPut(row, family, VERSION_COLUMN, Bytes.toBytes(version), put);
+      if (success) {
+        index(row, value);
+      }
+      return success;
     } catch (IOException e) {
       throw new AvroBaseException("Could not encode " + value, e);
     } finally {

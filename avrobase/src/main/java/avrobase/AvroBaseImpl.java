@@ -1,23 +1,41 @@
 package avrobase;
 
 import org.apache.avro.Schema;
-import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.Decoder;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.JsonDecoder;
-import org.apache.avro.io.JsonEncoder;
+import org.apache.avro.io.*;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.lang.NotImplementedException;
+import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrServer;
+import org.apache.solr.client.solrj.SolrServerException;
+import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
+import org.apache.solr.client.solrj.request.AbstractUpdateRequest;
+import org.apache.solr.client.solrj.request.UpdateRequest;
+import org.apache.solr.client.solrj.response.QueryResponse;
+import org.apache.solr.common.SolrDocument;
+import org.apache.solr.common.SolrDocumentList;
+import org.apache.solr.common.SolrInputDocument;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.charset.Charset;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -29,13 +47,144 @@ import java.util.concurrent.ConcurrentHashMap;
  * Time: 12:21:33 PM
  */
 public abstract class AvroBaseImpl<T extends SpecificRecord> implements AvroBase<T> {
+  private static final String SCHEMA_LOCATION = "/admin/file/?file=schema.xml";
+
   protected Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
   protected Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();
   protected AvroFormat format;
+
+  // Search
+  protected SolrServer solrServer;
+  protected String uniqueKey;
+  protected List<String> fields;
+
   protected static final Charset UTF8 = Charset.forName("utf-8");
 
   public AvroBaseImpl(AvroFormat format) {
     this.format = format;
+  }
+
+  public AvroBaseImpl(AvroFormat format, String solrURL) throws AvroBaseException {
+    this(format);
+    if (solrURL != null) {
+      try {
+        solrServer = new CommonsHttpSolrServer(solrURL);
+        URL url = new URL(solrURL + SCHEMA_LOCATION);
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        DocumentBuilder db = dbf.newDocumentBuilder();
+        Document document = db.parse(url.openStream());
+
+        // Need to get the unique key and all the fields
+        NodeList uniqueKeys = document.getElementsByTagName("uniqueKey");
+        if (uniqueKeys == null || uniqueKeys.getLength() != 1) {
+          throw new AvroBaseException("Invalid schema configuration, must have 1 unique key");
+        }
+        uniqueKey = uniqueKeys.item(0).getTextContent();
+
+        // Now get all the fields we are going to index and query
+        NodeList fieldList = document.getElementsByTagName("field");
+        fields = new ArrayList<String>(fieldList.getLength());
+        for (int i = 0; i < fieldList.getLength(); i++) {
+          Node field = fieldList.item(i);
+          String name = field.getAttributes().getNamedItem("name").getTextContent();
+          fields.add(name);
+        }
+      } catch (MalformedURLException e) {
+        throw new AvroBaseException("Invalid Solr URL: " + solrURL, e);
+      } catch (ParserConfigurationException e) {
+        throw new AvroBaseException(e);
+      } catch (SAXException e) {
+        throw new AvroBaseException("Failed to parse schema", e);
+      } catch (IOException e) {
+        throw new AvroBaseException("Failed to read schema", e);
+      }
+    }
+  }
+
+  @Override
+  public Iterable<Row<T>> search(String query, int start, int rows) throws AvroBaseException {
+    if (solrServer == null) {
+      throw new AvroBaseException("Searching for this type is not enabled");
+    }
+    SolrQuery solrQuery = new SolrQuery().setQuery(query).setStart(start).setRows(rows).setFields(uniqueKey);
+    try {
+      QueryResponse queryResponse = solrServer.query(solrQuery);
+      SolrDocumentList list = queryResponse.getResults();
+      final Iterator<SolrDocument> solrDocumentIterator = list.iterator();
+      return new Iterable<Row<T>>() {
+
+        @Override
+        public Iterator<Row<T>> iterator() {
+          return new Iterator<Row<T>>() {
+
+            @Override
+            public boolean hasNext() {
+              return solrDocumentIterator.hasNext();
+            }
+
+            @Override
+            public Row<T> next() {
+              SolrDocument solrDocument = solrDocumentIterator.next();
+              Map<String, Object> map = solrDocument.getFieldValueMap();
+              Object o = map.get(uniqueKey);
+              if (o == null) {
+                throw new AvroBaseException("Unique key not present in document");
+              }
+              return get($(o.toString()));
+            }
+
+            @Override
+            public void remove() {
+              throw new NotImplementedException();
+            }
+          };
+        }
+      };
+    } catch (SolrServerException e) {
+      throw new AvroBaseException("Query failure: " + query, e);
+    }
+  }
+
+  /**
+   * Index a row and value.
+   * @param row
+   * @param value
+   * @return
+   */
+  protected boolean index(byte[] row, T value) {
+    if (solrServer == null) {
+      return false;
+    }
+    Schema schema = value.getSchema();
+    SolrInputDocument document = new SolrInputDocument();
+    for (String field : fields) {
+      Schema.Field f = schema.getField(field);
+      if (f != null) {
+        Object o = value.get(f.pos());
+        document.addField(field, o);
+      }
+    }
+    document.addField(uniqueKey, $_(row));
+    try {
+      UpdateRequest req = new UpdateRequest();
+      req.setAction(AbstractUpdateRequest.ACTION.COMMIT, false, false);
+      req.add(document);
+      solrServer.request(req);
+      return true;
+    } catch (SolrServerException e) {
+      throw new AvroBaseException(e);
+    } catch (IOException e) {
+      throw new AvroBaseException(e);
+    }
+  }
+
+  /**
+   * Reindex all rows.  Could be very very expensive.
+   */
+  protected void reindex() {
+    for (Row<T> tRow: scan(null, null)) {
+      index(tRow.row, tRow.value);
+    }
   }
 
   /**

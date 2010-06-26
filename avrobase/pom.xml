@@ -34,7 +34,7 @@
       <artifactId>commons-codec</artifactId>
       <version>1.4</version>
     </dependency>
-    
+
     <!-- Guice -->
     <dependency>
       <groupId>com.google.code.guice</groupId>
@@ -42,11 +42,18 @@
       <version>2.0.1</version>
     </dependency>
 
-    <!-- Lucene -->
+    <!-- Solr -->
     <dependency>
-      <groupId>org.apache.lucene</groupId>
-      <artifactId>lucene-core</artifactId>
-      <version>3.0.1</version>
+      <groupId>org.apache.solr</groupId>
+      <artifactId>solr-solrj</artifactId>
+      <version>1.4.0</version>
+    </dependency>
+
+    <!-- Logging -->
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-simple</artifactId>
+      <version>1.5.6</version>
     </dependency>
 
     <!-- Test -->

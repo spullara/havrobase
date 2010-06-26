@@ -46,4 +46,14 @@ public interface AvroBase<T extends SpecificRecord> {
    */
   Iterable<Row<T>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException;
 
+  /**
+   * Search the set of objects in the system.
+   * @param query
+   * @param sort
+   * @param start
+   * @param rows
+   * @return
+   * @throws AvroBaseException
+   */
+  Iterable<Row<T>> search(String query, int start, int rows) throws AvroBaseException;
 }

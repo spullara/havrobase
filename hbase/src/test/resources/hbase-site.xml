@@ -22,6 +22,7 @@
  */
 -->
 <configuration>
+  <!--
   <property>
     <name>hbase.zookeeper.quorum</name>
     <value>hbase</value>
@@ -41,4 +42,5 @@
       calls of next may take longer and longer times when the cache is empty.
     </description>
   </property>
+  -->
 </configuration>
