@@ -8,10 +8,6 @@
   <modules>
     <module>avrobase</module>
     <module>hbase</module>
-    <module>mysql</module>
-    <module>file</module>
-    <module>cassandra</module>
-    <module>memcached</module>
   </modules>
   <packaging>pom</packaging>
 
