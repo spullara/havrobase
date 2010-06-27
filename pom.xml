@@ -2,9 +2,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>avrobase</groupId>
-  <artifactId>meta</artifactId>
-  <version>0.1-SNAPSHOT</version>
+  <properties>
+    <havrobase.version>0.1</havrobase.version>
+  </properties>
+
+  <groupId>havrobase</groupId>
+  <artifactId>all</artifactId>
+  <version>${havrobase.version}</version>
   <modules>
     <module>avrobase</module>
     <module>solr</module>
@@ -12,10 +16,10 @@
   </modules>
   <packaging>pom</packaging>
 
-  <name>Avrobase</name>
+  <name>HAvroBase</name>
   <url>http://maven.apache.org</url>
 
-   <repositories>
+  <repositories>
     <repository>
       <id>javarants releases</id>
       <url>http://www.javarants.com/repository/</url>
