@@ -17,7 +17,7 @@ import org.apache.avro.specific.SpecificRecord;
 public class AvroBaseFactory {
   public static <T extends SpecificRecord> AvroBase<T> createAvroBase(Module module, Class<? extends AvroBase> clazz, final byte[] table, final byte[] family, final AvroFormat format) throws AvroBaseException {
     Injector injector = Guice.createInjector(module);
-    AvroBase base = injector.createChildInjector(new Module() {
+    return injector.createChildInjector(new Module() {
       @Override
       public void configure(Binder binder) {        
         binder.bind(byte[].class).annotatedWith(Names.named("table")).toInstance(table);
@@ -25,6 +25,5 @@ public class AvroBaseFactory {
         binder.bind(AvroFormat.class).toInstance(format);
       }
     }).getInstance(clazz);
-    return base;
   }
 }

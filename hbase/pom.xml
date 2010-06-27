@@ -19,10 +19,10 @@
   </properties>
 
   <dependencies>
-    <!-- Modules -->
+    <!-- Module -->
     <dependency>
       <groupId>avrobase</groupId>
-      <artifactId>base</artifactId>
+      <artifactId>solr</artifactId>
       <version>0.1-SNAPSHOT</version>
     </dependency>
 
@@ -55,14 +55,6 @@
       <groupId>org.apache.zookeeper</groupId>
       <artifactId>zookeeper</artifactId>
       <version>3.2.2</version>
-    </dependency>
-
-    <!-- Testing -->
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>4.8.1</version>
-      <scope>test</scope>
     </dependency>
   </dependencies>
 
@@ -104,13 +96,6 @@
             </goals>
           </execution>
         </executions>
-      </plugin>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <configuration>
-          <source>1.6</source>
-          <target>1.6</target>
-        </configuration>
       </plugin>
     </plugins>
   </build>

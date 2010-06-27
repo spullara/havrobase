@@ -1,9 +1,7 @@
 package havrobase;
 
-import avrobase.AvroBaseException;
-import avrobase.AvroBaseImpl;
-import avrobase.AvroFormat;
-import avrobase.Row;
+import avrobase.*;
+import avrobase.solr.SolrAvroBase;
 import com.google.inject.Inject;
 import com.google.inject.internal.Nullable;
 import com.google.inject.name.Named;
@@ -36,7 +34,7 @@ import java.util.NavigableMap;
  * Date: Jun 8, 2010
  * Time: 5:13:35 PM
  */
-public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
+public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   // HBase Constants
   public static final byte[] VERSION_COLUMN = $("v");
@@ -406,5 +404,4 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
     family.setInMemory(false);
     return family;
   }
-
 }
