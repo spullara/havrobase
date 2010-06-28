@@ -8,7 +8,7 @@
 
   <groupId>havrobase</groupId>
   <artifactId>all</artifactId>
-  <version>${havrobase.version}</version>
+  <version>0.1</version>
   <modules>
     <module>avrobase</module>
     <module>solr</module>
