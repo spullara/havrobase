@@ -20,9 +20,9 @@
   <dependencies>
     <!-- Base module -->
     <dependency>
-      <groupId>avrobase</groupId>
+      <groupId>havrobase</groupId>
       <artifactId>base</artifactId>
-      <version>0.1-SNAPSHOT</version>
+      <version>0.1</version>
     </dependency>
 
     <!-- Solr -->
