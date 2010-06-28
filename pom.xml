@@ -13,6 +13,7 @@
     <module>avrobase</module>
     <module>solr</module>
     <module>hbase</module>
+    <module>memcached</module>
   </modules>
   <packaging>pom</packaging>
 
