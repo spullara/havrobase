@@ -46,6 +46,13 @@ public interface AvroBase<T extends SpecificRecord> {
   boolean put(byte[] row, T value, long version) throws AvroBaseException;
 
   /**
+   * Delete the row.
+   * @param row
+   * @throws AvroBaseException
+   */
+  void delete(byte[] row) throws AvroBaseException;
+
+  /**
    * Scan the database for instances.
    * @param startRow
    * @param stopRow

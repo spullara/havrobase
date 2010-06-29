@@ -148,12 +148,31 @@ public abstract class SolrAvroBase<T extends SpecificRecord> extends AvroBaseImp
   }
 
   /**
+   * Remove an id from the index.
+   * @param row
+   * @throws AvroBaseException
+   */
+  protected void unindex(byte[] row) throws AvroBaseException {
+    if (solrServer == null) {
+      return;
+    }
+    try {
+      solrServer.deleteById($_(row));
+      solrServer.commit();
+    } catch (SolrServerException e) {
+      throw new AvroBaseException(e);
+    } catch (IOException e) {
+      throw new AvroBaseException(e);
+    }
+  }
+
+  /**
    * Index a row and value.
    * @param row
    * @param value
    * @return
    */
-  protected boolean index(byte[] row, T value) {
+  protected boolean index(byte[] row, T value) throws AvroBaseException {
     if (solrServer == null) {
       return false;
     }

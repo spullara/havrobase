@@ -81,6 +81,11 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
     return b;
   }
 
+  @Override
+  public void delete(byte[] row) throws AvroBaseException {
+    client.delete($_(row));
+  }
+
   private String getSchemaKey(Schema schema) {
     String schemaKey = hashCache.get(schema);
     if (schemaKey == null) {

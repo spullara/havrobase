@@ -53,6 +53,10 @@ public class AvroBaseFactoryTest {
     }
 
     @Override
+    public void delete(byte[] row) throws AvroBaseException {
+    }
+
+    @Override
     public Iterable<Row<T>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
       return null;
     }

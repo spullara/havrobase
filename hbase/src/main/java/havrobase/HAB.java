@@ -13,6 +13,7 @@ import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
 import org.apache.hadoop.hbase.TableNotFoundException;
+import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTable;
@@ -109,7 +110,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     } finally {
       pool.putTable(schemaTable);
     }
-    HTable table = getTable(tableName, family);
+    HTable table = getTable();
     try {
       if (table.getTableDescriptor().getFamily(family) == null) {
         HColumnDescriptor familyDesc = getColumnDesc(family);
@@ -163,7 +164,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   @Override
   public Row<T> get(byte[] row) throws AvroBaseException {
-    HTable table = getTable(tableName, family);
+    HTable table = getTable();
     try {
       Result result = getHBaseRow(table, row, family);
       return getRowResult(result, row);
@@ -193,7 +194,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
         return row;
       }
       case SEQUENTIAL: {
-        HTable table = getTable(tableName, family);
+        HTable table = getTable();
         try {
           byte[] row;
           do {
@@ -219,7 +220,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   @Override
   public void put(byte[] row, T value) throws AvroBaseException {
-    HTable table = getTable(tableName, family);
+    HTable table = getTable();
     long version;
     try {
       do {
@@ -236,7 +237,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   @Override
   public boolean put(byte[] row, T value, long version) throws AvroBaseException {
-    HTable table = getTable(tableName, family);
+    HTable table = getTable();
     try {
       Schema schema = value.getSchema();
       String schemaKey = storeSchema(schema);
@@ -263,11 +264,29 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
   }
 
   @Override
+  public void delete(byte[] row) throws AvroBaseException {
+    HTable table = getTable();
+    try {
+      Delete delete = new Delete(row);
+      delete.deleteFamily(family);
+      table.delete(delete);
+      unindex(row);
+    } catch (IOException e) {
+      throw new AvroBaseException("Failed to delete row", e);
+    } finally {
+      pool.putTable(table);
+    }
+  }
+
+  @Override
   public Iterable<Row<T>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
     Scan scan = new Scan();
     scan.addFamily(family);
     if (startRow != null) {
       scan.setStartRow(startRow);
+    } else {
+      // Skip the sequence key
+      scan.setStartRow(new byte[] {1});
     }
     if (stopRow != null) {
       scan.setStopRow(stopRow);
@@ -289,6 +308,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
             public Row<T> next() {
               Result result = results.next();
               try {
+                // TODO: If there is a row but nothing for this family it still seems to work...
                 return getRowResult(result, result.getRow());
               } catch (AvroBaseException e) {
                 throw new RuntimeException(e);
@@ -434,15 +454,15 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   // Get or create the specified table with columnfamily
 
-  private HTable getTable(byte[] tableName, byte[] columnFamily) throws AvroBaseException {
+  private HTable getTable() throws AvroBaseException {
     HTable table;
     try {
       table = pool.getTable(tableName);
     } catch (RuntimeException e) {
       if (e.getCause() instanceof TableNotFoundException) {
-        HColumnDescriptor family = getColumnDesc(columnFamily);
+        HColumnDescriptor familyDesc = getColumnDesc(family);
         HTableDescriptor tableDesc = new HTableDescriptor(tableName);
-        tableDesc.addFamily(family);
+        tableDesc.addFamily(familyDesc);
         try {
           admin.createTable(tableDesc);
         } catch (IOException e1) {
