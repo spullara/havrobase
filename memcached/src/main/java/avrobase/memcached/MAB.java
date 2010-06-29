@@ -54,6 +54,11 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
   }
 
   @Override
+  public byte[] create(T value) throws AvroBaseException {
+    throw new NotImplementedException();
+  }
+
+  @Override
   public void put(byte[] row, T value) throws AvroBaseException {
     String key = $_(row);
     Schema schema = value.getSchema();

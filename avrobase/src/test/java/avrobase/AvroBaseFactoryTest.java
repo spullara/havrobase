@@ -39,6 +39,11 @@ public class AvroBaseFactoryTest {
     }
 
     @Override
+    public byte[] create(T value) throws AvroBaseException {
+      return new byte[0];
+    }
+
+    @Override
     public void put(byte[] row, T value) throws AvroBaseException {
     }
 

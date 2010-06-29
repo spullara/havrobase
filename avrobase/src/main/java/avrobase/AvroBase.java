@@ -19,6 +19,14 @@ public interface AvroBase<T extends SpecificRecord> {
   Row<T> get(byte[] row) throws AvroBaseException;
 
   /**
+   * Save a value with an automatically generated unique key and return that key.
+   * @param value
+   * @return
+   * @throws AvroBaseException
+   */
+  byte[] create(T value) throws AvroBaseException;
+
+  /**
    * Put a row with that will retry until successfully increments the version number
    * @param row
    * @param value

@@ -1,6 +1,8 @@
 package havrobase;
 
-import avrobase.*;
+import avrobase.AvroBaseException;
+import avrobase.AvroFormat;
+import avrobase.Row;
 import avrobase.solr.SolrAvroBase;
 import com.google.inject.Inject;
 import com.google.inject.internal.Nullable;
@@ -23,9 +25,13 @@ import org.apache.hadoop.hbase.io.hfile.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Random;
 
 /**
  * HAvroBase client.
@@ -36,12 +42,16 @@ import java.util.NavigableMap;
  */
 public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
-  // HBase Constants
+  // Avro Table Constants
   public static final byte[] VERSION_COLUMN = $("v");
   public static final byte[] SCHEMA_COLUMN = $("s");
+  public static final byte[] SEQUENCE_COLUMN = $("i");
   public static final byte[] DATA_COLUMN = $("d");
-  public static final byte[] AVRO_FAMILY = $("avro");
   public static final byte[] FORMAT_COLUMN = $("f");
+  public static final byte[] SEQUENCE_ROW = Bytes.toBytes(0);
+
+  // Schema Table constants
+  public static final byte[] AVRO_FAMILY = $("avro");
 
   // Cache the schemas with a two-way lookup
   private HTablePool pool;
@@ -49,8 +59,12 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
   private byte[] tableName;
   private byte[] family;
   private byte[] schemaName;
+  private CreateType createType;
 
-  // Typed return value with metadata  
+  public enum CreateType {
+    RANDOM,
+    SEQUENTIAL
+  }
 
   /**
    * Load the schema map on init and then keep it up to date from then on. The HBase
@@ -68,7 +82,8 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
           @Named("family") byte[] family,
           @Named("schema") byte[] schemaName,
           @Named("solr") @Nullable String solrURL,
-          AvroFormat format
+          AvroFormat format,
+          CreateType createType
   ) throws AvroBaseException {
     super(format, solrURL);
     this.pool = pool;
@@ -76,6 +91,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     this.tableName = tableName;
     this.family = family;
     this.schemaName = schemaName;
+    this.createType = createType;
     HTable schemaTable;
     try {
       schemaTable = pool.getTable(this.schemaName);
@@ -156,6 +172,49 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     } finally {
       pool.putTable(table);
     }
+  }
+
+  private Random random = new SecureRandom();
+  private static MessageDigest md5;
+  static {
+    try {
+      md5 = MessageDigest.getInstance("MD5");
+    } catch (NoSuchAlgorithmException e) {
+      throw new AssertionError("Failed to find MD5 message digest");
+    }
+  }
+
+  @Override
+  public byte[] create(T value) throws AvroBaseException {
+    switch (createType) {
+      case RANDOM: {
+        byte[] row = Bytes.toBytes(random.nextLong());
+        while (!put(row, value, 0));
+        return row;
+      }
+      case SEQUENTIAL: {
+        HTable table = getTable(tableName, family);
+        try {
+          byte[] row;
+          do {
+            long l = table.incrementColumnValue(SEQUENCE_ROW, family, SEQUENCE_COLUMN, 1);
+            row = String.valueOf(l).getBytes();
+            int length = row.length;
+            for (int i = 0; i < length / 2; i++) {
+              byte tmp = row[i];
+              row[i] = row[length - i];
+              row[length - i] = tmp;
+            }
+          } while(!put(row, value, 0));
+          return row;
+        } catch (IOException e) {
+          throw new AvroBaseException("Failed to increment column", e);
+        } finally {
+          pool.putTable(table);
+        }
+      }
+    }
+    return null;
   }
 
   @Override
