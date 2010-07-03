@@ -18,7 +18,7 @@ import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.MasterNotRunningException;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
-import org.apache.hadoop.hbase.client.HTable;
+import org.apache.hadoop.hbase.client.HTableInterface;
 import org.apache.hadoop.hbase.client.HTablePool;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.util.Bytes;
@@ -29,7 +29,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Test all the public interfaces to the HAvroBase
@@ -48,7 +50,7 @@ public class HABTest {
 
     static {
       try {
-        admin = new HBaseAdmin(new HBaseConfiguration());
+        admin = new HBaseAdmin(HBaseConfiguration.create());
       } catch (MasterNotRunningException e) {
         throw new RuntimeException(e);
       }
@@ -72,7 +74,7 @@ public class HABTest {
 
   private static void deleteUserTable() {
     try {
-      HBaseAdmin admin = new HBaseAdmin(new HBaseConfiguration());
+      HBaseAdmin admin = new HBaseAdmin(HBaseConfiguration.create());
       admin.disableTable(TABLE);
       admin.deleteTable(TABLE);
     } catch (IOException e) {
@@ -81,7 +83,7 @@ public class HABTest {
 
   private static void deleteSchemaTable() {
     try {
-      HBaseAdmin admin = new HBaseAdmin(new HBaseConfiguration());
+      HBaseAdmin admin = new HBaseAdmin(HBaseConfiguration.create());
       admin.disableTable(SCHEMA_TABLE);
       admin.deleteTable(SCHEMA_TABLE);
     } catch (IOException e) {
@@ -155,7 +157,7 @@ public class HABTest {
     assertEquals(saved, loaded.value);
 
     HTablePool pool = new HTablePool();
-    HTable table = pool.getTable(TABLE);
+    HTableInterface table = pool.getTable(TABLE);
     try {
       Get get = new Get(row);
       byte[] DATA = Bytes.toBytes("d");
@@ -183,12 +185,12 @@ public class HABTest {
     testSaveJsonFormat();
     byte[] row = Bytes.toBytes("spullara");
     HTablePool pool = new HTablePool();
-    HTable userTable = pool.getTable(TABLE);
+    HTableInterface userTable = pool.getTable(TABLE);
     try {
       Get get = new Get(row);
       Result userRow = userTable.get(get);
       byte[] schemaKey = userRow.getValue(COLUMN_FAMILY, Bytes.toBytes("s"));
-      HTable schemaTable = pool.getTable(SCHEMA_TABLE);
+      HTableInterface schemaTable = pool.getTable(SCHEMA_TABLE);
       Schema actual;
       try {
         Result schemaRow = schemaTable.get(new Get(schemaKey));

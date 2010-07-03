@@ -3,7 +3,7 @@
   <parent>
     <groupId>havrobase</groupId>
     <artifactId>all</artifactId>
-    <version>0.1.1-SNAPSHOT</version>
+    <version>0.1.2-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -29,7 +29,7 @@
     <dependency>
       <groupId>org.apache.solr</groupId>
       <artifactId>solr-solrj</artifactId>
-      <version>1.4.0</version>
+        <version>1.4.0</version>
     </dependency>
 
     <!-- Logging for Solr -->

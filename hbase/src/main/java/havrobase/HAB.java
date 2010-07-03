@@ -17,6 +17,7 @@ import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTable;
+import org.apache.hadoop.hbase.client.HTableInterface;
 import org.apache.hadoop.hbase.client.HTablePool;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
@@ -93,7 +94,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     this.family = family;
     this.schemaName = schemaName;
     this.createType = createType;
-    HTable schemaTable;
+    HTableInterface schemaTable;
     try {
       schemaTable = pool.getTable(this.schemaName);
     } catch (RuntimeException e) {
@@ -110,7 +111,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     } finally {
       pool.putTable(schemaTable);
     }
-    HTable table = getTable();
+    HTableInterface table = getTable();
     try {
       if (table.getTableDescriptor().getFamily(family) == null) {
         HColumnDescriptor familyDesc = getColumnDesc(family);
@@ -131,7 +132,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   // Load all the schemas currently registered in hbase
 
-  private void loadSchemas(HTable schemaTable) throws IOException {
+  private void loadSchemas(HTableInterface schemaTable) throws IOException {
     Scan scan = new Scan();
     scan.addColumn(AVRO_FAMILY, SCHEMA_COLUMN);
     ResultScanner scanner = schemaTable.getScanner(scan);
@@ -145,8 +146,8 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
   // Given a table and family, create a corresponding table and
   // family with hbase.
 
-  private HTable createSchemaTable() throws AvroBaseException {
-    HTable schemaTable;
+  private HTableInterface createSchemaTable() throws AvroBaseException {
+    HTableInterface schemaTable;
     HColumnDescriptor family = new HColumnDescriptor(AVRO_FAMILY);
     family.setMaxVersions(1);
     family.setCompressionType(Compression.Algorithm.LZO);
@@ -164,7 +165,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   @Override
   public Row<T> get(byte[] row) throws AvroBaseException {
-    HTable table = getTable();
+    HTableInterface table = getTable();
     try {
       Result result = getHBaseRow(table, row, family);
       return getRowResult(result, row);
@@ -194,7 +195,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
         return row;
       }
       case SEQUENTIAL: {
-        HTable table = getTable();
+        HTableInterface table = getTable();
         try {
           byte[] row;
           do {
@@ -220,7 +221,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   @Override
   public void put(byte[] row, T value) throws AvroBaseException {
-    HTable table = getTable();
+    HTableInterface table = getTable();
     long version;
     try {
       do {
@@ -237,7 +238,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   @Override
   public boolean put(byte[] row, T value, long version) throws AvroBaseException {
-    HTable table = getTable();
+    HTableInterface table = getTable();
     try {
       Schema schema = value.getSchema();
       String schemaKey = storeSchema(schema);
@@ -265,7 +266,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   @Override
   public void delete(byte[] row) throws AvroBaseException {
-    HTable table = getTable();
+    HTableInterface table = getTable();
     try {
       Delete delete = new Delete(row);
       delete.deleteFamily(family);
@@ -291,7 +292,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     if (stopRow != null) {
       scan.setStopRow(stopRow);
     }
-    HTable table = pool.getTable(tableName);
+    HTableInterface table = pool.getTable(tableName);
     try {
       ResultScanner scanner = table.getScanner(scan);
       final Iterator<Result> results = scanner.iterator();
@@ -376,7 +377,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
   // Pull the version out of the version column. Version 0 means that it does not exist
   // in the hbase row
 
-  private long getVersion(byte[] columnFamily, byte[] row, HTable table) throws IOException {
+  private long getVersion(byte[] columnFamily, byte[] row, HTableInterface table) throws IOException {
     Get get = new Get(row);
     get.addColumn(columnFamily, VERSION_COLUMN);
     Result result = table.get(get);
@@ -402,7 +403,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
         schemaKey = createSchemaKey(schema, doc);
         Put put = new Put($(schemaKey));
         put.add(AVRO_FAMILY, SCHEMA_COLUMN, $(doc));
-        HTable schemaTable = pool.getTable(schemaName);
+        HTableInterface schemaTable = pool.getTable(schemaName);
         try {
           schemaTable.put(put);
         } catch (IOException e) {
@@ -417,7 +418,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   // Pull an hbase row, ready to be wrapped by Row
 
-  private Result getHBaseRow(HTable table, byte[] row, byte[] columnFamily) throws IOException {
+  private Result getHBaseRow(HTableInterface table, byte[] row, byte[] columnFamily) throws IOException {
     Get get = new Get(row);
     get.addColumn(columnFamily, DATA_COLUMN);
     get.addColumn(columnFamily, SCHEMA_COLUMN);
@@ -436,7 +437,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     }
     Schema schema = schemaCache.get($_(schemaKey));
     if (schema == null) {
-      HTable schemaTable = pool.getTable(schemaName);
+      HTableInterface schemaTable = pool.getTable(schemaName);
       try {
         Get schemaGet = new Get(schemaKey);
         schemaGet.addColumn(AVRO_FAMILY, SCHEMA_COLUMN);
@@ -454,8 +455,8 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   // Get or create the specified table with columnfamily
 
-  private HTable getTable() throws AvroBaseException {
-    HTable table;
+  private HTableInterface getTable() throws AvroBaseException {
+    HTableInterface table;
     try {
       table = pool.getTable(tableName);
     } catch (RuntimeException e) {
