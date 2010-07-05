@@ -41,7 +41,7 @@ import java.util.Map;
  * Date: Jun 27, 2010
  * Time: 10:50:31 AM
  */
-public abstract class SolrAvroBase<T extends SpecificRecord> extends AvroBaseImpl<T> {
+public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   private static final String SCHEMA_LOCATION = "/admin/file/?file=schema.xml";
   protected SolrServer solrServer;
   protected String uniqueKey;
@@ -104,7 +104,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord> extends AvroBaseImp
    * @throws avrobase.AvroBaseException
    */
   @Override
-  public Iterable<Row<T>> search(String query, int start, int rows) throws AvroBaseException {
+  public Iterable<Row<T, K>> search(String query, int start, int rows) throws AvroBaseException {
     if (solrServer == null) {
       throw new AvroBaseException("Searching for this type is not enabled");
     }
@@ -113,11 +113,11 @@ public abstract class SolrAvroBase<T extends SpecificRecord> extends AvroBaseImp
       QueryResponse queryResponse = solrServer.query(solrQuery);
       SolrDocumentList list = queryResponse.getResults();
       final Iterator<SolrDocument> solrDocumentIterator = list.iterator();
-      return new Iterable<Row<T>>() {
+      return new Iterable<Row<T, K>>() {
 
         @Override
-        public Iterator<Row<T>> iterator() {
-          return new Iterator<Row<T>>() {
+        public Iterator<Row<T, K>> iterator() {
+          return new Iterator<Row<T, K>>() {
 
             @Override
             public boolean hasNext() {
@@ -125,7 +125,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord> extends AvroBaseImp
             }
 
             @Override
-            public Row<T> next() {
+            public Row<T, K> next() {
               SolrDocument solrDocument = solrDocumentIterator.next();
               Map<String, Object> map = solrDocument.getFieldValueMap();
               Object o = map.get(uniqueKey);
@@ -152,7 +152,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord> extends AvroBaseImp
    * @param row
    * @throws AvroBaseException
    */
-  protected void unindex(byte[] row) throws AvroBaseException {
+  protected void unindex(K row) throws AvroBaseException {
     if (solrServer == null) {
       return;
     }
@@ -172,7 +172,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord> extends AvroBaseImp
    * @param value
    * @return
    */
-  protected boolean index(byte[] row, T value) throws AvroBaseException {
+  protected boolean index(K row, T value) throws AvroBaseException {
     if (solrServer == null) {
       return false;
     }
@@ -203,7 +203,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord> extends AvroBaseImp
    * Reindex all rows.  Could be very very expensive.
    */
   protected void reindex() {
-    for (Row<T> tRow: scan(null, null)) {
+    for (Row<T, K> tRow: scan(null, null)) {
       index(tRow.row, tRow.value);
     }
   }

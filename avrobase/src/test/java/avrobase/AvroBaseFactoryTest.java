@@ -4,6 +4,7 @@ import com.google.inject.Binder;
 import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.google.inject.name.Named;
+import com.google.inject.name.Names;
 import org.apache.avro.specific.SpecificRecord;
 import org.junit.Test;
 
@@ -18,7 +19,7 @@ import static org.junit.Assert.assertTrue;
  * Time: 5:29:26 PM
  */
 public class AvroBaseFactoryTest {
-  public static class TestAvroBase<T extends SpecificRecord> implements AvroBase<T> {
+  public static class TestAvroBase<K> implements AvroBase<SpecificRecord, byte[]> {
 
     public boolean inited;
     private byte[] table;
@@ -34,21 +35,21 @@ public class AvroBaseFactoryTest {
     }
 
     @Override
-    public Row<T> get(byte[] row) throws AvroBaseException {
+    public Row<SpecificRecord, byte[]> get(byte[] row) throws AvroBaseException {
       return null;
     }
 
     @Override
-    public byte[] create(T value) throws AvroBaseException {
+    public byte[] create(SpecificRecord value) throws AvroBaseException {
       return new byte[0];
     }
 
     @Override
-    public void put(byte[] row, T value) throws AvroBaseException {
+    public void put(byte[] row, SpecificRecord value) throws AvroBaseException {
     }
 
     @Override
-    public boolean put(byte[] row, T value, long version) throws AvroBaseException {
+    public boolean put(byte[] row, SpecificRecord value, long version) throws AvroBaseException {
       return false;
     }
 
@@ -57,25 +58,27 @@ public class AvroBaseFactoryTest {
     }
 
     @Override
-    public Iterable<Row<T>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
+    public Iterable<Row<SpecificRecord, byte[]>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
       return null;
     }
 
     @Override
-    public Iterable<Row<T>> search(String query, int start, int rows) throws AvroBaseException {
+    public Iterable<Row<SpecificRecord, byte[]>> search(String query, int start, int rows) throws AvroBaseException {
       return null;
     }
   }
 
   @Test
   public void testFactory() throws AvroBaseException {
-    byte[] table = "table".getBytes();
-    byte[] family = "family".getBytes();
-    TestAvroBase<SpecificRecord> base = (TestAvroBase<SpecificRecord>) AvroBaseFactory.createAvroBase(new Module() {
+    final byte[] table = "table".getBytes();
+    final byte[] family = "family".getBytes();
+    TestAvroBase base = (TestAvroBase) AvroBaseFactory.createAvroBase(new Module() {
       @Override
       public void configure(Binder binder) {
+        binder.bind(byte[].class).annotatedWith(Names.named("table")).toInstance(table);
+        binder.bind(byte[].class).annotatedWith(Names.named("family")).toInstance(family);
       }
-    }, TestAvroBase.class, table, family, AvroFormat.JSON);
+    }, TestAvroBase.class, AvroFormat.JSON);
     assertEquals("table", new String(base.table));
     assertEquals("family", new String(base.family));
     assertEquals(AvroFormat.JSON, base.format);

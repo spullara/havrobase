@@ -10,18 +10,18 @@ import org.apache.avro.specific.SpecificRecord;
  * Date: Jun 9, 2010
  * Time: 12:07:47 PM
  */
-public class Row<T extends SpecificRecord> {
+public class Row<T extends SpecificRecord, K> {
   public final T value;
-  public final byte[] row;
+  public final K row;
   public long timestamp = Long.MAX_VALUE;
   public long version = -1;
 
-  public Row(T value, byte[] row) {
+  public Row(T value, K row) {
     this.value = value;
     this.row = row;
   }
 
-  public Row(T value, byte[] row, long timestamp, long version) {
+  public Row(T value, K row, long timestamp, long version) {
     this(value, row);
     this.timestamp = timestamp;
     this.version = version;

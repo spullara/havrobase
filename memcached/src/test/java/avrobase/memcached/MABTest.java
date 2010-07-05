@@ -41,16 +41,16 @@ public class MABTest {
 
     @Override
     public void configure(Binder binder) {
-
-
       binder.bind(MemCachedClient.class).toInstance(new MemCachedClient(true));
-      binder.bind(byte[].class).annotatedWith(Names.named("schema")).toInstance("test_schema".getBytes());
+      binder.bind(String.class).annotatedWith(Names.named("schema")).toInstance("test_schema");
+      binder.bind(String.class).annotatedWith(Names.named("table")).toInstance("test_user");
+      binder.bind(String.class).annotatedWith(Names.named("family")).toInstance("profile");
     }
   }
 
   @Test
   public void testSave() throws AvroBaseException {
-    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new MABModule(), MAB.class, "test_user".getBytes(), "profile".getBytes(), AvroFormat.BINARY);
+    AvroBase<User, String> userHAB = AvroBaseFactory.createAvroBase(new MABModule(), MAB.class, AvroFormat.BINARY);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");
@@ -62,9 +62,9 @@ public class MABTest {
     saved.image = $("http://farm1.static.flickr.com/1/buddyicons/32354567@N00.jpg");
     saved.location = $("Los Altos, CA");
     saved.password = ByteBuffer.wrap($("").getBytes());
-    byte[] row = "spullara".getBytes();
+    String row = "spullara";
     userHAB.put(row, saved);
-    Row<User> loaded = userHAB.get(row);
+    Row<User, String> loaded = userHAB.get(row);
     assertEquals(saved, loaded.value);
     assertTrue(userHAB.put(row, loaded.value, loaded.version));
     assertFalse(userHAB.put(row, loaded.value, loaded.version));

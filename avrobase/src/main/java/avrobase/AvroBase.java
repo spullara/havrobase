@@ -9,14 +9,14 @@ import org.apache.avro.specific.SpecificRecord;
  * Date: Jun 9, 2010
  * Time: 11:45:23 AM
  */
-public interface AvroBase<T extends SpecificRecord> {
+public interface AvroBase<T extends SpecificRecord, K> {
   /**
    * Return a single row
    * @param row
    * @return
    * @throws AvroBaseException
    */
-  Row<T> get(byte[] row) throws AvroBaseException;
+  Row<T, K> get(K row) throws AvroBaseException;
 
   /**
    * Save a value with an automatically generated unique key and return that key.
@@ -24,7 +24,7 @@ public interface AvroBase<T extends SpecificRecord> {
    * @return
    * @throws AvroBaseException
    */
-  byte[] create(T value) throws AvroBaseException;
+  K create(T value) throws AvroBaseException;
 
   /**
    * Put a row with that will retry until successfully increments the version number
@@ -33,7 +33,7 @@ public interface AvroBase<T extends SpecificRecord> {
    * @return
    * @throws AvroBaseException
    */
-  void put(byte[] row, T value) throws AvroBaseException;
+  void put(K row, T value) throws AvroBaseException;
 
   /**
    * Put a row if the current version in the database matches the passed version.
@@ -43,14 +43,14 @@ public interface AvroBase<T extends SpecificRecord> {
    * @return
    * @throws AvroBaseException
    */
-  boolean put(byte[] row, T value, long version) throws AvroBaseException;
+  boolean put(K row, T value, long version) throws AvroBaseException;
 
   /**
    * Delete the row.
    * @param row
    * @throws AvroBaseException
    */
-  void delete(byte[] row) throws AvroBaseException;
+  void delete(K row) throws AvroBaseException;
 
   /**
    * Scan the database for instances.
@@ -59,7 +59,7 @@ public interface AvroBase<T extends SpecificRecord> {
    * @return
    * @throws AvroBaseException
    */
-  Iterable<Row<T>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException;
+  Iterable<Row<T, K>> scan(K startRow, K stopRow) throws AvroBaseException;
 
   /**
    * Search the set of objects in the system.
@@ -70,5 +70,5 @@ public interface AvroBase<T extends SpecificRecord> {
    * @return
    * @throws AvroBaseException
    */
-  Iterable<Row<T>> search(String query, int start, int rows) throws AvroBaseException;
+  Iterable<Row<T, K>> search(String query, int start, int rows) throws AvroBaseException;
 }

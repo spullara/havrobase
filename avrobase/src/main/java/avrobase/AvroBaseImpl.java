@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Date: Jun 23, 2010
  * Time: 12:21:33 PM
  */
-public abstract class AvroBaseImpl<T extends SpecificRecord> implements AvroBase<T> {
+public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroBase<T, K> {
 
   protected Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
   protected Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();
@@ -131,11 +131,7 @@ public abstract class AvroBaseImpl<T extends SpecificRecord> implements AvroBase
     }
   }
 
-  protected static byte[] $(String string) {
-    return string.getBytes(UTF8);
-  }
+  protected abstract K $(String string);
 
-  protected static String $_(byte[] bytes) {
-    return new String(bytes, UTF8);
-  }
+  protected abstract String $_(K bytes);
 }

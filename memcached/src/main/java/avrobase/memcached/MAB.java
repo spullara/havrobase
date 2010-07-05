@@ -19,7 +19,7 @@ import org.apache.commons.lang.NotImplementedException;
  * Date: Jun 23, 2010
  * Time: 12:14:36 PM
  */
-public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
+public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   private String prekey;
   private String schemaPrekey;
   private MemCachedClient client;
@@ -27,63 +27,60 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
   @Inject
   public MAB(
           MemCachedClient client,
-          @Named("table") byte[] table,
-          @Named("family") byte[] family,
-          @Named("schema") byte[] schemaPrekey,
+          @Named("table") String table,
+          @Named("family") String family,
+          @Named("schema") String schemaPrekey,
           AvroFormat format
   ) {
     super(format);
     this.client = client;
-    prekey = new StringBuilder().append(new String(table)).append(":").append(new String(family)).append(":").toString();
-    this.schemaPrekey = new StringBuilder(new String(schemaPrekey)).append(":").toString();
+    prekey = new StringBuilder().append(table).append(":").append(family).append(":").toString();
+    this.schemaPrekey = new StringBuilder(schemaPrekey).append(":").toString();
   }
 
   @Override
-  public Row<T> get(byte[] row) throws AvroBaseException {
-    String key = $_(row);
-    MemcachedItem memcachedItem = client.gets(prekey + key);
+  public Row<T, String> get(String row) throws AvroBaseException {
+    MemcachedItem memcachedItem = client.gets(prekey + row);
     long version = memcachedItem.getCasUnique();
     byte[] bytes = (byte[]) memcachedItem.getValue();
-    String schemaKey = $_((byte[])client.get(prekey + schemaPrekey + key));
+    String schemaKey = new String((byte[])client.get(prekey + schemaPrekey + row));
     Schema schema = schemaCache.get(schemaKey);
     if (schema == null) {
       byte[] schemab = (byte[]) client.get(schemaPrekey + schemaKey);
       schema = loadSchema(schemab, schemaKey);
     }
-    return new Row<T>(readValue(bytes, schema, format), row, 0, version) ;
+    return new Row<T, String>(readValue(bytes, schema, format), row, 0, version) ;
   }
 
   @Override
-  public byte[] create(T value) throws AvroBaseException {
+  public String create(T value) throws AvroBaseException {
     throw new NotImplementedException();
   }
 
   @Override
-  public void put(byte[] row, T value) throws AvroBaseException {
-    String key = $_(row);
+  public void put(String row, T value) throws AvroBaseException {
     Schema schema = value.getSchema();
     String schemaKey = getSchemaKey(schema);
     byte[] bytes = serialize(value);
-    client.set(prekey + key, bytes);
-    client.set(prekey + schemaPrekey + key, schemaKey.getBytes());
+    client.set(prekey + row, bytes);
+    client.set(prekey + schemaPrekey + row, schemaKey.getBytes());
   }
 
   @Override
-  public boolean put(byte[] row, T value, long version) throws AvroBaseException {
-    String key = $_(row);
+  public boolean put(String row, T value, long version) throws AvroBaseException {
     Schema schema = value.getSchema();
     String schemaKey = getSchemaKey(schema);
     byte[] bytes = serialize(value);
-    boolean b = client.cas(prekey + key, bytes, version);
+    boolean b = client.cas(prekey + row, bytes, version);
     if (b) {
-      client.set(prekey + schemaPrekey + key, schemaKey.getBytes());
+      client.set(prekey + schemaPrekey + row, schemaKey.getBytes());
     }
     return b;
   }
 
   @Override
-  public void delete(byte[] row) throws AvroBaseException {
-    client.delete($_(row));
+  public void delete(String row) throws AvroBaseException {
+    client.delete(row);
   }
 
   private String getSchemaKey(Schema schema) {
@@ -97,12 +94,22 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T> {
   }
 
   @Override
-  public Iterable<Row<T>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
+  public Iterable<Row<T, String>> scan(String startRow, String stopRow) throws AvroBaseException {
     throw new NotImplementedException();
   }
 
   @Override
-  public Iterable<Row<T>> search(String query, int start, int rows) throws AvroBaseException {
+  public Iterable<Row<T, String>> search(String query, int start, int rows) throws AvroBaseException {
     throw new NotImplementedException();
+  }
+
+  @Override
+  protected String $(String string) {
+    return string;
+  }
+
+  @Override
+  protected String $_(String string) {
+    return string;
   }
 }

@@ -42,18 +42,18 @@ import java.util.Random;
  * Date: Jun 8, 2010
  * Time: 5:13:35 PM
  */
-public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
+public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
 
   // Avro Table Constants
-  public static final byte[] VERSION_COLUMN = $("v");
-  public static final byte[] SCHEMA_COLUMN = $("s");
-  public static final byte[] SEQUENCE_COLUMN = $("i");
-  public static final byte[] DATA_COLUMN = $("d");
-  public static final byte[] FORMAT_COLUMN = $("f");
-  public static final byte[] SEQUENCE_ROW = Bytes.toBytes(0);
+  private final byte[] VERSION_COLUMN = $("v");
+  private final byte[] SCHEMA_COLUMN = $("s");
+  private final byte[] SEQUENCE_COLUMN = $("i");
+  private final byte[] DATA_COLUMN = $("d");
+  private final byte[] FORMAT_COLUMN = $("f");
+  private final byte[] SEQUENCE_ROW = Bytes.toBytes(0);
 
   // Schema Table constants
-  public static final byte[] AVRO_FAMILY = $("avro");
+  private final byte[] AVRO_FAMILY = $("avro");
 
   // Cache the schemas with a two-way lookup
   private HTablePool pool;
@@ -164,7 +164,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
   }
 
   @Override
-  public Row<T> get(byte[] row) throws AvroBaseException {
+  public Row<T, byte[]> get(byte[] row) throws AvroBaseException {
     HTableInterface table = getTable();
     try {
       Result result = getHBaseRow(table, row, family);
@@ -280,7 +280,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
   }
 
   @Override
-  public Iterable<Row<T>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
+  public Iterable<Row<T, byte[]>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
     Scan scan = new Scan();
     scan.addFamily(family);
     if (startRow != null) {
@@ -296,17 +296,17 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     try {
       ResultScanner scanner = table.getScanner(scan);
       final Iterator<Result> results = scanner.iterator();
-      return new Iterable<Row<T>>() {
+      return new Iterable<Row<T, byte[]>>() {
         @Override
-        public Iterator<Row<T>> iterator() {
-          return new Iterator<Row<T>>() {
+        public Iterator<Row<T, byte[]>> iterator() {
+          return new Iterator<Row<T, byte[]>>() {
             @Override
             public boolean hasNext() {
               return results.hasNext();
             }
 
             @Override
-            public Row<T> next() {
+            public Row<T, byte[]> next() {
               Result result = results.next();
               try {
                 // TODO: If there is a row but nothing for this family it still seems to work...
@@ -333,7 +333,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
 
   // Given an HBase row result take it apart and populate the Row wrapper metadata.
 
-  private Row<T> getRowResult(Result result, byte[] row) throws AvroBaseException {
+  private Row<T, byte[]> getRowResult(Result result, byte[] row) throws AvroBaseException {
     // Defaults
     byte[] latest = null;
     long timestamp = Long.MAX_VALUE;
@@ -366,7 +366,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
         if (formatB != null) {
           format = AvroFormat.values()[Bytes.toInt(formatB)];
         }
-        return new Row<T>(readValue(latest, schema, format), row, timestamp, version);
+        return new Row<T, byte[]>(readValue(latest, schema, format), row, timestamp, version);
       }
       return null;
     } catch (IOException e) {
@@ -483,5 +483,15 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T> {
     family.setCompressionType(Compression.Algorithm.LZO);
     family.setInMemory(false);
     return family;
+  }
+
+  @Override
+  protected byte[] $(String string) {
+    return Bytes.toBytes(string);
+  }
+
+  @Override
+  protected String $_(byte[] bytes) {
+    return Bytes.toString(bytes);
   }
 }

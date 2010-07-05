@@ -59,6 +59,8 @@ public class HABTest {
     @Override
     public void configure(Binder binder) {
       binder.bind(byte[].class).annotatedWith(Names.named("schema")).toInstance(SCHEMA_TABLE);
+      binder.bind(byte[].class).annotatedWith(Names.named("table")).toInstance(TABLE);
+      binder.bind(byte[].class).annotatedWith(Names.named("family")).toInstance(COLUMN_FAMILY);
       binder.bind(String.class).annotatedWith(Names.named("solr")).toInstance("http://localhost:8983/solr/user");
       binder.bind(HAB.CreateType.class).toInstance(HAB.CreateType.SEQUENTIAL);
       binder.bind(HTablePool.class).toInstance(new HTablePool());
@@ -92,15 +94,15 @@ public class HABTest {
 
   @Test
   public void testNoRow() throws AvroBaseException {
-    AvroBase<User> instance = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
-    Row<User> row = instance.get(Bytes.toBytes("lukew"));
+    AvroBase<User, byte[]> instance = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
+    Row<User, byte[]> row = instance.get(Bytes.toBytes("lukew"));
     assertEquals(null, row);
   }
 
   @Test
   public void testSave() throws AvroBaseException {
     deleteSchemaTable();
-    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
+    AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");
@@ -114,13 +116,13 @@ public class HABTest {
     saved.password = ByteBuffer.wrap($("").getBytes());
     byte[] row = Bytes.toBytes("spullara");
     userHAB.put(row, saved);
-    Row<User> loaded = userHAB.get(row);
+    Row<User, byte[]> loaded = userHAB.get(row);
     assertEquals(saved, loaded.value);
   }
 
   @Test
   public void testSaveFail() throws AvroBaseException {
-    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
+    AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");
@@ -138,7 +140,7 @@ public class HABTest {
 
   @Test
   public void testSaveJsonFormat() throws AvroBaseException, IOException {
-    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.JSON);
+    AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");
@@ -153,7 +155,7 @@ public class HABTest {
     saved.password = ByteBuffer.wrap($("").getBytes());
     byte[] row = Bytes.toBytes("spullara");
     userHAB.put(row, saved);
-    Row<User> loaded = userHAB.get(row);
+    Row<User, byte[]> loaded = userHAB.get(row);
     assertEquals(saved, loaded.value);
 
     HTablePool pool = new HTablePool();
@@ -172,10 +174,10 @@ public class HABTest {
   @Test
   public void testScan() throws AvroBaseException, IOException {
     testSaveJsonFormat();
-    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, COLUMN_FAMILY, AvroFormat.BINARY);
+    AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
     byte[] row = Bytes.toBytes("spullara");
-    Row<User> loaded = userHAB.get(row);
-    for (Row<User> user : userHAB.scan(row, row)) {
+    Row<User, byte[]> loaded = userHAB.get(row);
+    for (Row<User, byte[]> user : userHAB.scan(row, row)) {
       assertEquals(loaded, user);
     }
   }
@@ -220,8 +222,8 @@ public class HABTest {
   @Test
   public void testAddFamily() {
     testSave();
-    AvroBase<User> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, TABLE, "profile2".getBytes(), AvroFormat.JSON);
-    Row<User> row = userHAB.get("spullara".getBytes());
+    AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
+    Row<User, byte[]> row = userHAB.get("spullara".getBytes());
   }
 
   private Utf8 $(String value) {
