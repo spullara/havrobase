@@ -1,1 +1,45 @@
-Use Avro instead of native columns in HBase
+The AvroBase interface attempts to abstract away the details of storing data within key/value stores by layering
+a simple, broadly applicable, API on top of them along with an evolvable data description format for storing
+the values within the key-value store. The API consists of a small number of verbs:
+
+public interface AvroBase<T extends SpecificRecord, K> {
+  Row<T, K> get(K row) throws AvroBaseException;
+  K create(T value) throws AvroBaseException;
+  void put(K row, T value) throws AvroBaseException;
+  boolean put(K row, T value, long version) throws AvroBaseException;
+  void delete(K row) throws AvroBaseException;
+  Iterable<Row<T, K>> scan(K startRow, K stopRow) throws AvroBaseException;
+  Iterable<Row<T, K>> search(String query, int start, int rows) throws AvroBaseException;
+}
+
+The AvroBaseException will wrap any underlying datastore issues that occur and is a runtime exception so will
+play nicely beneath almost any API. The most complicated part of the system is the initial instantiation of an
+AvroBase implementation. We are using Guice to bind parameters to the implementations. Here is an example taken
+from the Memcached implementation:
+
+  static class MABModule implements Module {
+    static {
+      String[] serverlist = {"localhost:11211"};
+
+      SockIOPool pool = SockIOPool.getInstance();
+      pool.setServers(serverlist);
+      pool.initialize();
+    }
+
+    @Override
+    public void configure(Binder binder) {
+      binder.bind(MemCachedClient.class).toInstance(new MemCachedClient(true));
+      binder.bind(String.class).annotatedWith(Names.named("schema")).toInstance("test_schema");
+      binder.bind(String.class).annotatedWith(Names.named("table")).toInstance("test_user");
+      binder.bind(String.class).annotatedWith(Names.named("family")).toInstance("profile");
+    }
+  }
+
+  @Test
+  public void testSave() throws AvroBaseException {
+    AvroBase<User, String> userHAB = AvroBaseFactory.createAvroBase(new MABModule(), MAB.class, AvroFormat.BINARY);
+    ...
+  }
+
+The AvroBaseFactory creates a child injector that also injects the AvroFormat into the implementation. This part of
+the system is a work in progress and I am open to ideas on better ways to create and use the implementations.
