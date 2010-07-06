@@ -55,7 +55,7 @@
     {
       "name":"mobile",
       "type":["string", "null"],
-      "default": null
+      "default": "null"
     }     
   ]
 }

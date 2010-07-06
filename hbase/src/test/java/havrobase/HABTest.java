@@ -16,11 +16,14 @@ import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.MasterNotRunningException;
+import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTableInterface;
 import org.apache.hadoop.hbase.client.HTablePool;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -28,6 +31,8 @@ import org.junit.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.Map;
+import java.util.NavigableMap;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -70,25 +75,31 @@ public class HABTest {
 
   @BeforeClass
   public static void setup() {
-    deleteSchemaTable();
-    deleteUserTable();
+    deleteTable(SCHEMA_TABLE);
+    deleteTable(TABLE);
   }
 
-  private static void deleteUserTable() {
+  private static void deleteTable(byte[] tableName) {
+    HTablePool pool = new HTablePool();
+    HTableInterface table = null;
     try {
-      HBaseAdmin admin = new HBaseAdmin(HBaseConfiguration.create());
-      admin.disableTable(TABLE);
-      admin.deleteTable(TABLE);
-    } catch (IOException e) {
-    }
-  }
-
-  private static void deleteSchemaTable() {
-    try {
-      HBaseAdmin admin = new HBaseAdmin(HBaseConfiguration.create());
-      admin.disableTable(SCHEMA_TABLE);
-      admin.deleteTable(SCHEMA_TABLE);
-    } catch (IOException e) {
+      table = pool.getTable(tableName);
+      Scan scan = new Scan();
+      ResultScanner scanner = table.getScanner(scan);
+      for (Result r : scanner) {
+        Delete delete = new Delete(r.getRow());
+        NavigableMap<byte[], NavigableMap<byte[], byte[]>> map = r.getNoVersionMap();
+        for (Map.Entry<byte[], NavigableMap<byte[], byte[]>> family : map.entrySet()) {
+          for (Map.Entry<byte[], byte[]> columns : family.getValue().entrySet()) {
+            delete.deleteColumn(family.getKey(), columns.getKey());
+          }
+        }
+        table.delete(delete);
+      }
+    } catch (Exception e) {
+      // ignore
+    } finally {
+      if (table != null) pool.putTable(table);
     }
   }
 
@@ -101,7 +112,7 @@ public class HABTest {
 
   @Test
   public void testSave() throws AvroBaseException {
-    deleteSchemaTable();
+    deleteTable(SCHEMA_TABLE);
     AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
     User saved = new User();
     saved.firstName = $("Sam");
@@ -140,7 +151,7 @@ public class HABTest {
 
   @Test
   public void testSaveJsonFormat() throws AvroBaseException, IOException {
-    AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
+    AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.JSON);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");

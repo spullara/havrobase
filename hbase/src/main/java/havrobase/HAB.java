@@ -16,7 +16,6 @@ import org.apache.hadoop.hbase.TableNotFoundException;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
-import org.apache.hadoop.hbase.client.HTable;
 import org.apache.hadoop.hbase.client.HTableInterface;
 import org.apache.hadoop.hbase.client.HTablePool;
 import org.apache.hadoop.hbase.client.Put;
@@ -33,6 +32,7 @@ import java.security.SecureRandom;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.NoSuchElementException;
 import java.util.Random;
 
 /**
@@ -50,7 +50,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   private final byte[] SEQUENCE_COLUMN = $("i");
   private final byte[] DATA_COLUMN = $("d");
   private final byte[] FORMAT_COLUMN = $("f");
-  private final byte[] SEQUENCE_ROW = Bytes.toBytes(0);
+  private final byte[] SEQUENCE_ROW = new byte[0];
 
   // Schema Table constants
   private final byte[] AVRO_FAMILY = $("avro");
@@ -78,14 +78,14 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
    */
   @Inject
   public HAB(
-          HTablePool pool,
-          HBaseAdmin admin,
-          @Named("table") byte[] tableName,
-          @Named("family") byte[] family,
-          @Named("schema") byte[] schemaName,
-          @Named("solr") @Nullable String solrURL,
-          AvroFormat format,
-          CreateType createType
+      HTablePool pool,
+      HBaseAdmin admin,
+      @Named("table") byte[] tableName,
+      @Named("family") byte[] family,
+      @Named("schema") byte[] schemaName,
+      @Named("solr") @Nullable String solrURL,
+      AvroFormat format,
+      CreateType createType
   ) throws AvroBaseException {
     super(format, solrURL);
     this.pool = pool;
@@ -178,6 +178,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
 
   private Random random = new SecureRandom();
   private static MessageDigest md5;
+
   static {
     try {
       md5 = MessageDigest.getInstance("MD5");
@@ -191,7 +192,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
     switch (createType) {
       case RANDOM: {
         byte[] row = Bytes.toBytes(random.nextLong());
-        while (!put(row, value, 0));
+        while (!put(row, value, 0)) ;
         return row;
       }
       case SEQUENTIAL: {
@@ -207,7 +208,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
               row[i] = row[length - i];
               row[length - i] = tmp;
             }
-          } while(!put(row, value, 0));
+          } while (!put(row, value, 0));
           return row;
         } catch (IOException e) {
           throw new AvroBaseException("Failed to increment column", e);
@@ -228,7 +229,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
         // FIXME: Spin until success, last one wins. Provably dangerous?
         version = getVersion(family, row, table);
       } while (!put(row, value, version));
-      index(row, value);      
+      index(row, value);
     } catch (IOException e) {
       throw new AvroBaseException("Failed to retrieve version for row: " + $_(row), e);
     } finally {
@@ -285,9 +286,6 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
     scan.addFamily(family);
     if (startRow != null) {
       scan.setStartRow(startRow);
-    } else {
-      // Skip the sequence key
-      scan.setStartRow(new byte[] {1});
     }
     if (stopRow != null) {
       scan.setStopRow(stopRow);
@@ -300,20 +298,33 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
         @Override
         public Iterator<Row<T, byte[]>> iterator() {
           return new Iterator<Row<T, byte[]>>() {
+            Row<T, byte[]> r;
+
             @Override
             public boolean hasNext() {
-              return results.hasNext();
+              if (r != null) return true;
+              while (results.hasNext()) {
+                Result result = results.next();
+                r = getRowResult(result, result.getRow());
+                // Skip empty rows and the increment row
+                if (r == null || r.row.length == 0) {
+                  continue;
+                }
+                return true;
+              }
+              return false;
             }
 
             @Override
             public Row<T, byte[]> next() {
-              Result result = results.next();
-              try {
-                // TODO: If there is a row but nothing for this family it still seems to work...
-                return getRowResult(result, result.getRow());
-              } catch (AvroBaseException e) {
-                throw new RuntimeException(e);
+              if (hasNext()) {
+                try {
+                  return r;
+                } finally {
+                  r = null;
+                }
               }
+              throw new NoSuchElementException();
             }
 
             @Override
