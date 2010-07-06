@@ -21,6 +21,7 @@ import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
 import org.apache.hadoop.hbase.client.HTableInterface;
 import org.apache.hadoop.hbase.client.HTablePool;
+import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
@@ -90,17 +91,37 @@ public class HABTest {
         Delete delete = new Delete(r.getRow());
         NavigableMap<byte[], NavigableMap<byte[], byte[]>> map = r.getNoVersionMap();
         for (Map.Entry<byte[], NavigableMap<byte[], byte[]>> family : map.entrySet()) {
-          for (Map.Entry<byte[], byte[]> columns : family.getValue().entrySet()) {
-            delete.deleteColumn(family.getKey(), columns.getKey());
-          }
+          delete.deleteFamily(family.getKey());
         }
         table.delete(delete);
       }
+      Delete delete = new Delete(new byte[0]);
+      table.delete(delete);
     } catch (Exception e) {
       // ignore
     } finally {
       if (table != null) pool.putTable(table);
     }
+  }
+
+  @Test
+  public void testEmptyRowId() throws IOException {
+    deleteTable(TABLE);
+    HTablePool pool = new HTablePool();
+    HTableInterface table = pool.getTable(TABLE);
+    byte[] EMPTY = new byte[0];
+    Put put = new Put(EMPTY);
+    put.add(COLUMN_FAMILY, $("test").getBytes(), $("test").getBytes());
+    table.put(put);
+    Scan scan = new Scan();
+    boolean found = false;
+    for (Result r : table.getScanner(scan)) {
+      assertFalse(found);
+      found = true;
+      assertEquals(0, EMPTY.length);
+    }
+    assertTrue(found);
+    deleteTable(TABLE);
   }
 
   @Test
@@ -129,6 +150,27 @@ public class HABTest {
     userHAB.put(row, saved);
     Row<User, byte[]> loaded = userHAB.get(row);
     assertEquals(saved, loaded.value);
+  }
+
+  @Test
+  public void testCreateSequential() throws AvroBaseException {
+    deleteTable(SCHEMA_TABLE);
+    AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
+    User saved = new User();
+    saved.firstName = $("Sam");
+    saved.lastName = $("Pullara");
+    saved.birthday = $("1212");
+    saved.gender = GenderType.MALE;
+    saved.email = $("spullara@yahoo.com");
+    saved.description = $("CTO of RightTime, Inc. and one of the founders of BagCheck");
+    saved.title = $("Engineer");
+    saved.image = $("http://farm1.static.flickr.com/1/buddyicons/32354567@N00.jpg");
+    saved.location = $("Los Altos, CA");
+    saved.password = ByteBuffer.wrap($("").getBytes());
+    byte[] row = userHAB.create(saved);
+    Row<User, byte[]> loaded = userHAB.get(row);
+    assertEquals(saved, loaded.value);
+    assertEquals("1", Bytes.toString(row));
   }
 
   @Test
@@ -179,6 +221,14 @@ public class HABTest {
       assertTrue(Bytes.toString(result.getValue(COLUMN_FAMILY, DATA)).startsWith("{"));
     } finally {
       pool.putTable(table);
+    }
+  }
+
+  @Test
+  public void testAttack() throws IOException {
+    for (int i = 0; i < 10; i++) {
+      testSave();
+      testSaveJsonFormat();
     }
   }
 
