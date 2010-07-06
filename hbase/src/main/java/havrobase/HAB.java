@@ -205,8 +205,8 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
             int length = row.length;
             for (int i = 0; i < length / 2; i++) {
               byte tmp = row[i];
-              row[i] = row[length - i];
-              row[length - i] = tmp;
+              row[i] = row[length - i - 1];
+              row[length - i - 1] = tmp;
             }
           } while (!put(row, value, 0));
           return row;
@@ -251,6 +251,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       put.add(family, FORMAT_COLUMN, Bytes.toBytes(format.ordinal()));
       if (version == 0) {
         table.put(put);
+        index(row, value);
         return true;
       }
       boolean success = table.checkAndPut(row, family, VERSION_COLUMN, Bytes.toBytes(version), put);
