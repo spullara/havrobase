@@ -376,6 +376,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
         if (values != null) {
           for (Map.Entry<Long, byte[]> e : values.entrySet()) {
             if (e.getKey() < timestamp) {
+              timestamp = e.getKey();
               latest = e.getValue();
             }
           }

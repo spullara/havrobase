@@ -27,6 +27,8 @@ public class Row<T extends SpecificRecord, K> {
     this.version = version;
   }
 
+
+
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;
