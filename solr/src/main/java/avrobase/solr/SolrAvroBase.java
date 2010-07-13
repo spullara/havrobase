@@ -47,6 +47,10 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
   protected String uniqueKey;
   protected List<String> fields;
 
+  // TODO: Replace this with a better way to commit / optimize
+  private volatile long lastCommit = System.currentTimeMillis();
+  private volatile long lastOptimize = System.currentTimeMillis();
+
   /**
    * Given a solr url this constructor will pull the schema and use that to index
    * values when the index function is called. The search method then can query the
@@ -188,7 +192,15 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
     document.addField(uniqueKey, $_(row));
     try {
       UpdateRequest req = new UpdateRequest();
-      req.setAction(AbstractUpdateRequest.ACTION.COMMIT, false, false);
+      long current = System.currentTimeMillis();
+      if (lastCommit - current > 100) {
+        lastCommit = current;
+        req.setAction(AbstractUpdateRequest.ACTION.COMMIT, false, false);
+      }
+      if (lastOptimize - current > 3600) {
+        lastOptimize = current;
+        req.setAction(AbstractUpdateRequest.ACTION.OPTIMIZE, false, false);
+      }
       req.add(document);
       solrServer.request(req);
       return true;
