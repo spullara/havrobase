@@ -24,6 +24,12 @@
       <artifactId>avro</artifactId>
       <version>1.3.2</version>
       <scope>compile</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>org.mortbay.jetty</groupId>
+          <artifactId>jetty</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
 
     <!-- Hex -->
