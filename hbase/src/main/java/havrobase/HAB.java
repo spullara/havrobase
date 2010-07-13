@@ -26,8 +26,6 @@ import org.apache.hadoop.hbase.io.hfile.Compression;
 import org.apache.hadoop.hbase.util.Bytes;
 
 import java.io.IOException;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Iterator;
 import java.util.Map;
@@ -62,10 +60,13 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   private byte[] family;
   private byte[] schemaName;
   private CreateType createType;
+  protected static final TimestampGenerator TIMESTAMP_GENERATOR = new TimestampGenerator();
 
   public enum CreateType {
     RANDOM,
-    SEQUENTIAL
+    SEQUENTIAL,
+    TIMESTAMP,
+    REVERSE_TIMESTAMP
   }
 
   /**
@@ -177,22 +178,15 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   }
 
   private Random random = new SecureRandom();
-  private static MessageDigest md5;
-
-  static {
-    try {
-      md5 = MessageDigest.getInstance("MD5");
-    } catch (NoSuchAlgorithmException e) {
-      throw new AssertionError("Failed to find MD5 message digest");
-    }
-  }
 
   @Override
   public byte[] create(T value) throws AvroBaseException {
     switch (createType) {
       case RANDOM: {
         byte[] row = Bytes.toBytes(random.nextLong());
-        while (!put(row, value, 0)) ;
+        while (!put(row, value, 0)) {
+          // Loop until we find an empty row
+        }
         return row;
       }
       case SEQUENTIAL: {
@@ -212,6 +206,28 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
           return row;
         } catch (IOException e) {
           throw new AvroBaseException("Failed to increment column", e);
+        } finally {
+          pool.putTable(table);
+        }
+      }
+      case TIMESTAMP:
+      case REVERSE_TIMESTAMP: {
+        HTableInterface table = getTable();
+        try {
+          byte[] row;
+          do {
+            long l = createType == CreateType.TIMESTAMP ?
+                    TIMESTAMP_GENERATOR.getTimestamp() : 
+                    TIMESTAMP_GENERATOR.getInvertedTimestamp();
+            row = String.valueOf(l).getBytes();
+            int length = row.length;
+            for (int i = 0; i < length / 2; i++) {
+              byte tmp = row[i];
+              row[i] = row[length - i - 1];
+              row[length - i - 1] = tmp;
+            }
+          } while (!put(row, value, 0));
+          return row;
         } finally {
           pool.putTable(table);
         }
