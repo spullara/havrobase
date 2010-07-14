@@ -1,5 +1,8 @@
 package havrobase;
 
+import com.google.inject.Singleton;
+
+@Singleton
 public class TimestampGenerator {
   protected static final int NS_PER_MS = 1000000;
   long startMillis = System.currentTimeMillis();

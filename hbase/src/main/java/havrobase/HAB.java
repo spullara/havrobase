@@ -219,13 +219,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
             long l = createType == CreateType.TIMESTAMP ?
                     TIMESTAMP_GENERATOR.getTimestamp() : 
                     TIMESTAMP_GENERATOR.getInvertedTimestamp();
-            row = String.valueOf(l).getBytes();
-            int length = row.length;
-            for (int i = 0; i < length / 2; i++) {
-              byte tmp = row[i];
-              row[i] = row[length - i - 1];
-              row[length - i - 1] = tmp;
-            }
+            row = Bytes.toBytes(l);
           } while (!put(row, value, 0));
           return row;
         } finally {
