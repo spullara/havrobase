@@ -32,6 +32,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * Implement search via Solr. Extend this class instead of the AvroBaseImpl and use the index methods
@@ -50,6 +52,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
   // TODO: Replace this with a better way to commit / optimize
   private volatile long lastCommit = System.currentTimeMillis();
   private volatile long lastOptimize = System.currentTimeMillis();
+  private static Timer commitTimer = new Timer();
 
   /**
    * Given a solr url this constructor will pull the schema and use that to index
@@ -193,11 +196,29 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
     try {
       UpdateRequest req = new UpdateRequest();
       long current = System.currentTimeMillis();
-      if (lastCommit - current > 100) {
+      if (current - lastCommit > 100) {
         lastCommit = current;
         req.setAction(AbstractUpdateRequest.ACTION.COMMIT, false, false);
+      } else {
+        final long oldLastCommit = lastCommit;
+        commitTimer.schedule(new TimerTask() {
+          @Override
+          public void run() {
+            // TODO: this needs to be tested to make sure it is committing the last tx
+            if (oldLastCommit == lastCommit) {
+              lastCommit = System.currentTimeMillis();
+              UpdateRequest req = new UpdateRequest();
+              req.setAction(AbstractUpdateRequest.ACTION.COMMIT, false, false);
+              try {
+                solrServer.request(req);
+              } catch (Exception e) {
+                e.printStackTrace();
+              }
+            }
+          }
+        }, current + 100);
       }
-      if (lastOptimize - current > 3600) {
+      if (current - lastOptimize > 3600) {
         lastOptimize = current;
         req.setAction(AbstractUpdateRequest.ACTION.OPTIMIZE, false, false);
       }
