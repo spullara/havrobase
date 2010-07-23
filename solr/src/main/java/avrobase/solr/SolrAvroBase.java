@@ -5,6 +5,7 @@ import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
 import org.apache.avro.Schema;
+import org.apache.avro.generic.GenericArray;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.solr.client.solrj.SolrQuery;
@@ -60,6 +61,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
    * indexed objects and return them. The Solr configuration is the single source
    * of configuration for which fields are indexed.  The uniquekey has to be a string
    * converted via utf-8 from the row id.
+   *
    * @param format
    * @param solrURL
    * @throws avrobase.AvroBaseException
@@ -104,6 +106,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
   /**
    * Query the solr instance and return matching documents in score order. Should we
    * return only stored fields or load them automatically?
+   *
    * @param query
    * @param start
    * @param rows
@@ -156,6 +159,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
 
   /**
    * Remove an id from the index.
+   *
    * @param row
    * @throws AvroBaseException
    */
@@ -175,6 +179,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
 
   /**
    * Index a row and value.
+   *
    * @param row
    * @param value
    * @return
@@ -189,7 +194,22 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
       Schema.Field f = schema.getField(field);
       if (f != null) {
         Object o = value.get(f.pos());
-        document.addField(field, o);
+        if (o instanceof GenericArray) {
+          GenericArray ga = (GenericArray) o;
+          for (Object e : ga) {
+            if (e instanceof SpecificRecord) {
+              SpecificRecord sr = (SpecificRecord) e;
+              Schema.Field idField = sr.getSchema().getField("id");
+              if (idField != null) {
+                document.addField(field, sr.get(idField.pos()));
+              }
+            } else {
+              document.addField(field, e);
+            }
+          }
+        } else {
+          document.addField(field, o);
+        }
       }
     }
     document.addField(uniqueKey, $_(row));
@@ -236,7 +256,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
    * Reindex all rows.  Could be very very expensive.
    */
   protected void reindex() {
-    for (Row<T, K> tRow: scan(null, null)) {
+    for (Row<T, K> tRow : scan(null, null)) {
       index(tRow.row, tRow.value);
     }
   }
