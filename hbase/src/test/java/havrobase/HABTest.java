@@ -9,6 +9,7 @@ import bagcheck.GenderType;
 import bagcheck.User;
 import com.google.inject.Binder;
 import com.google.inject.Module;
+import com.google.inject.Provider;
 import com.google.inject.name.Names;
 import org.apache.avro.Schema;
 import org.apache.avro.io.JsonDecoder;
@@ -34,6 +35,9 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -50,6 +54,13 @@ public class HABTest {
   private static final byte[] COLUMN_FAMILY = Bytes.toBytes("profile");
   private static final byte[] TABLE = Bytes.toBytes("test_user");
   private static final byte[] SCHEMA_TABLE = Bytes.toBytes("test_schema");
+  protected static final Provider<String> NULL_STRING_PROVIDER = new Provider<String>() {
+    @Override
+    public String get() {
+      return null;
+    }
+  };
+  private static final int INSERTS = 10000;
 
   static class HABModule implements Module {
     public static final HBaseAdmin admin;
@@ -67,8 +78,9 @@ public class HABTest {
       binder.bind(byte[].class).annotatedWith(Names.named("schema")).toInstance(SCHEMA_TABLE);
       binder.bind(byte[].class).annotatedWith(Names.named("table")).toInstance(TABLE);
       binder.bind(byte[].class).annotatedWith(Names.named("family")).toInstance(COLUMN_FAMILY);
-      binder.bind(String.class).annotatedWith(Names.named("solr")).toInstance("http://localhost:8983/solr/user");
-      binder.bind(HAB.CreateType.class).toInstance(HAB.CreateType.SEQUENTIAL);
+//      binder.bind(String.class).annotatedWith(Names.named("solr")).toInstance("http://localhost:8983/solr/user");
+      binder.bind(String.class).annotatedWith(Names.named("solr")).toProvider(NULL_STRING_PROVIDER);
+      binder.bind(HAB.CreateType.class).toInstance(HAB.CreateType.RANDOM);
       binder.bind(HTablePool.class).toInstance(new HTablePool());
       binder.bind(HBaseAdmin.class).toInstance(admin);
     }
@@ -129,6 +141,43 @@ public class HABTest {
     AvroBase<User, byte[]> instance = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
     Row<User, byte[]> row = instance.get(Bytes.toBytes("lukew"));
     assertEquals(null, row);
+  }
+
+  @Test
+  public void testBenchmark() throws AvroBaseException, InterruptedException {
+    deleteTable(TABLE);
+    final AvroBase<User, byte[]> instance = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
+    final User saved = new User();
+    saved.firstName = $("Sam");
+    saved.lastName = $("Pullara");
+    saved.birthday = $("1212");
+    saved.gender = GenderType.MALE;
+    saved.email = $("spullara@yahoo.com");
+    saved.description = $("CTO of RightTime, Inc. and one of the founders of BagCheck");
+    saved.title = $("Engineer");
+    saved.image = $("http://farm1.static.flickr.com/1/buddyicons/32354567@N00.jpg");
+    saved.location = $("Los Altos, CA");
+    saved.password = ByteBuffer.wrap($("").getBytes());
+    long start = System.currentTimeMillis();
+    final Semaphore s = new Semaphore(10);
+    ExecutorService es = Executors.newCachedThreadPool();
+    for (int i = 0; i < INSERTS; i++) {
+      s.acquire();
+      es.submit(new Runnable() {
+        public void run() {
+          try {
+            instance.create(saved);
+          } finally {
+            s.release();
+          }
+        }
+      });
+    }
+    s.acquire(10);
+    s.release(10);
+    long end = System.currentTimeMillis();
+    System.out.println(INSERTS * 1000 / (end - start));
+    deleteTable(TABLE);
   }
 
   @Test
