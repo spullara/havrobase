@@ -194,14 +194,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
         try {
           byte[] row;
           do {
-            long l = table.incrementColumnValue(SEQUENCE_ROW, family, SEQUENCE_COLUMN, 1);
-            row = String.valueOf(l).getBytes();
-            int length = row.length;
-            for (int i = 0; i < length / 2; i++) {
-              byte tmp = row[i];
-              row[i] = row[length - i - 1];
-              row[length - i - 1] = tmp;
-            }
+            row = getNextRow(table, family);
           } while (!put(row, value, 0));
           return row;
         } catch (IOException e) {
@@ -228,6 +221,19 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       }
     }
     return null;
+  }
+
+  private byte[] getNextRow(HTableInterface table, final byte[] family) throws IOException {
+    byte[] row;
+    long l = table.incrementColumnValue(SEQUENCE_ROW, family, SEQUENCE_COLUMN, 1);
+    row = String.valueOf(l).getBytes();
+    int length = row.length;
+    for (int i = 0; i < length / 2; i++) {
+      byte tmp = row[i];
+      row[i] = row[length - i - 1];
+      row[length - i - 1] = tmp;
+    }
+    return row;
   }
 
   @Override
