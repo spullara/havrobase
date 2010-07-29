@@ -118,6 +118,18 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
     if (solrServer == null) {
       throw new AvroBaseException("Searching for this type is not enabled");
     }
+    // TODO: If we haven't indexed since the last update, index now. Once RTS is available we can fix this.
+    long current = System.currentTimeMillis();
+    if (current - lastCommit < 100) {
+      UpdateRequest req = new UpdateRequest();
+      req.setAction(AbstractUpdateRequest.ACTION.COMMIT, true, true);
+      try {
+        solrServer.request(req);
+        lastCommit = current;
+      } catch (Exception e) {
+        throw new AvroBaseException("Solr commit failed");
+      }
+    }
     SolrQuery solrQuery = new SolrQuery().setQuery(query).setStart(start).setRows(rows).setFields(uniqueKey);
     try {
       QueryResponse queryResponse = solrServer.query(solrQuery);
