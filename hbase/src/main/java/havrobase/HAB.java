@@ -395,7 +395,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
         if (formatB != null) {
           format = AvroFormat.values()[Bytes.toInt(formatB)];
         }
-        return new Row<T, byte[]>(readValue(latest, schema, format), row, timestamp, version);
+        return new Row<T, byte[]>(readValue(latest, schema, format), row, version);
       }
       return null;
     } catch (IOException e) {

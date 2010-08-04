@@ -49,7 +49,7 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
       byte[] schemab = (byte[]) client.get(schemaPrekey + schemaKey);
       schema = loadSchema(schemab, schemaKey);
     }
-    return new Row<T, String>(readValue(bytes, schema, format), row, 0, version) ;
+    return new Row<T, String>(readValue(bytes, schema, format), row, version) ;
   }
 
   @Override
