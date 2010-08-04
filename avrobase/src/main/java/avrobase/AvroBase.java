@@ -71,4 +71,13 @@ public interface AvroBase<T extends SpecificRecord, K> {
    * @throws AvroBaseException
    */
   Iterable<Row<T, K>> search(String query, int start, int rows) throws AvroBaseException;
+
+  /**
+   * Mutate the object and put it back in the AvroBase until success.
+   * @param row
+   * @param mutator
+   * @return
+   * @throws AvroBaseException
+   */
+  Row<T, K> mutate(K row, Mutator<T> mutator) throws AvroBaseException;
 }
