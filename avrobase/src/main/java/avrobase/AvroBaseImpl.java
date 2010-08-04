@@ -1,12 +1,7 @@
 package avrobase;
 
 import org.apache.avro.Schema;
-import org.apache.avro.io.BinaryEncoder;
-import org.apache.avro.io.Decoder;
-import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.Encoder;
-import org.apache.avro.io.JsonDecoder;
-import org.apache.avro.io.JsonEncoder;
+import org.apache.avro.io.*;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.specific.SpecificRecord;
@@ -40,30 +35,10 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
    * The serializer needs to know what format you would like new records
    * to be stored in. Old records are not affected when read as it stores their
    * format alongside them.
-   *
    * @param format
    */
   public AvroBaseImpl(AvroFormat format) {
     this.format = format;
-  }
-
-  @Override
-  public Row<T, K> mutate(K row, Mutator<T> tMutator) throws AvroBaseException {
-    Row<T, K> tRow;
-    do {
-      // Grab the current version
-      tRow = get(row);
-      // If it doesn't exist, then return null
-      if (tRow == null) return null;
-      T value = tMutator.mutate(tRow.value);
-      // Mutator can abort the mutation
-      if (value == null) return tRow;
-      // Optimistically set the row
-      if (put(row, value, tRow.version)) {
-        return new Row<T, K>(value, row, tRow.version + 1);
-      }
-      // On failure to set, try again
-    } while (true);
   }
 
   /**
@@ -110,7 +85,6 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
 
   /**
    * TODO: I really need to use a lookup table to reduce the per row overhead of schema references.
-   *
    * @param schema
    * @param doc
    * @return

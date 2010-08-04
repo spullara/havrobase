@@ -13,6 +13,7 @@ import org.apache.avro.specific.SpecificRecord;
 public class Row<T extends SpecificRecord, K> {
   public final T value;
   public final K row;
+  public long timestamp = Long.MAX_VALUE;
   public long version = -1;
 
   public Row(T value, K row) {
@@ -20,8 +21,9 @@ public class Row<T extends SpecificRecord, K> {
     this.row = row;
   }
 
-  public Row(T value, K row, long version) {
+  public Row(T value, K row, long timestamp, long version) {
     this(value, row);
+    this.timestamp = timestamp;
     this.version = version;
   }
 

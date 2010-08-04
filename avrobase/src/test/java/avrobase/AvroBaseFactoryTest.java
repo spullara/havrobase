@@ -66,11 +66,6 @@ public class AvroBaseFactoryTest {
     public Iterable<Row<SpecificRecord, byte[]>> search(String query, int start, int rows) throws AvroBaseException {
       return null;
     }
-
-    @Override
-    public Row<SpecificRecord, byte[]> mutate(byte[] row, Mutator<SpecificRecord> specificRecordMutator) throws AvroBaseException {
-      return null;
-    }
   }
 
   @Test
