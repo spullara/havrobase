@@ -33,6 +33,10 @@ public class SQ {
     this.count = count;
   }
   public static class SortField {
+    public SortField(String field, SolrQuery.ORDER order) {
+      this.field = field;
+      this.order = order;
+    }
     public String field;
     public SolrQuery.ORDER order;
   }

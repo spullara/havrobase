@@ -133,7 +133,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
     SolrQuery solrQuery = new SolrQuery().setQuery(sqh.query).setStart(sqh.start).setRows(sqh.count).setFields(uniqueKey);
     if (sqh.sort != null) {
       for (SQ.SortField sf : sqh.sort) {
-        solrQuery.setSortField(sf.field, sf.order);
+        solrQuery.addSortField(sf.field, sf.order);
       }
     }
     try {
