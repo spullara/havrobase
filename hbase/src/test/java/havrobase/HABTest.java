@@ -80,7 +80,7 @@ public class HABTest {
       binder.bind(byte[].class).annotatedWith(Names.named("family")).toInstance(COLUMN_FAMILY);
 //      binder.bind(String.class).annotatedWith(Names.named("solr")).toInstance("http://localhost:8983/solr/user");
       binder.bind(String.class).annotatedWith(Names.named("solr")).toProvider(NULL_STRING_PROVIDER);
-      binder.bind(HAB.CreateType.class).toInstance(HAB.CreateType.RANDOM);
+      binder.bind(HAB.CreateType.class).toInstance(HAB.CreateType.SEQUENTIAL);
       binder.bind(HTablePool.class).toInstance(new HTablePool());
       binder.bind(HBaseAdmin.class).toInstance(admin);
     }
