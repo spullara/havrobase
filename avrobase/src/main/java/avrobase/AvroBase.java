@@ -9,7 +9,7 @@ import org.apache.avro.specific.SpecificRecord;
  * Date: Jun 9, 2010
  * Time: 11:45:23 AM
  */
-public interface AvroBase<T extends SpecificRecord, K> {
+public interface AvroBase<T extends SpecificRecord, K, Q> {
   /**
    * Return a single row
    * @param row
@@ -70,7 +70,7 @@ public interface AvroBase<T extends SpecificRecord, K> {
    * @return
    * @throws AvroBaseException
    */
-  Iterable<Row<T, K>> search(String query, int start, int rows) throws AvroBaseException;
+  Iterable<Row<T, K>> search(Q query) throws AvroBaseException;
 
   /**
    * Mutate the object and put it back in the AvroBase until success.

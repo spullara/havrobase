@@ -44,7 +44,7 @@ import java.util.TimerTask;
  * Date: Jun 27, 2010
  * Time: 10:50:31 AM
  */
-public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
+public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBaseImpl<T, K, SQ> {
   private static final String SCHEMA_LOCATION = "/admin/file/?file=schema.xml";
   protected SolrServer solrServer;
   protected String uniqueKey;
@@ -114,7 +114,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
    * @throws avrobase.AvroBaseException
    */
   @Override
-  public Iterable<Row<T, K>> search(String query, int start, int rows) throws AvroBaseException {
+  public Iterable<Row<T, K>> search(SQ sqh) throws AvroBaseException {
     if (solrServer == null) {
       throw new AvroBaseException("Searching for this type is not enabled");
     }
@@ -130,7 +130,12 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
         throw new AvroBaseException("Solr commit failed");
       }
     }
-    SolrQuery solrQuery = new SolrQuery().setQuery(query).setStart(start).setRows(rows).setFields(uniqueKey);
+    SolrQuery solrQuery = new SolrQuery().setQuery(sqh.query).setStart(sqh.start).setRows(sqh.count).setFields(uniqueKey);
+    if (sqh.sort != null) {
+      for (SQ.SortField sf : sqh.sort) {
+        solrQuery.setSortField(sf.field, sf.order);
+      }
+    }
     try {
       QueryResponse queryResponse = solrServer.query(solrQuery);
       SolrDocumentList list = queryResponse.getResults();
@@ -165,7 +170,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
         }
       };
     } catch (SolrServerException e) {
-      throw new AvroBaseException("Query failure: " + query, e);
+      throw new AvroBaseException("Query failure: " + sqh.query, e);
     }
   }
 

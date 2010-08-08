@@ -4,7 +4,7 @@
 
   <groupId>havrobase</groupId>
   <artifactId>all</artifactId>
-  <version>0.1.3-SNAPSHOT</version>
+  <version>0.1.4-SNAPSHOT</version>
   <modules>
     <module>avrobase</module>
     <module>solr</module>
