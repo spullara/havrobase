@@ -130,12 +130,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
         throw new AvroBaseException("Solr commit failed");
       }
     }
-    SolrQuery solrQuery = new SolrQuery().setQuery(sqh.query).setStart(sqh.start).setRows(sqh.count).setFields(uniqueKey);
-    if (sqh.sort != null) {
-      for (SQ.SortField sf : sqh.sort) {
-        solrQuery.addSortField(sf.field, sf.order);
-      }
-    }
+    SolrQuery solrQuery = sqh.generateQuery(uniqueKey);    
     try {
       QueryResponse queryResponse = solrServer.query(solrQuery);
       SolrDocumentList list = queryResponse.getResults();

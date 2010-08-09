@@ -3,7 +3,7 @@ package avrobase.solr;
 import org.apache.solr.client.solrj.SolrQuery;
 
 /**
- * TODO: Edit this
+ * The default query generator for SolrAvroBase.
  * <p/>
  * User: sam
  * Date: Aug 8, 2010
@@ -32,6 +32,17 @@ public class SQ {
     this.start = start;
     this.count = count;
   }
+
+  public SolrQuery generateQuery(String uniqueKey) {
+    SolrQuery solrQuery = new SolrQuery().setQuery(query).setStart(start).setRows(count).setFields(uniqueKey);
+    if (sort != null) {
+      for (SortField sf : sort) {
+        solrQuery.addSortField(sf.field, sf.order);
+      }
+    }
+    return solrQuery;
+  }
+
   public static class SortField {
     public SortField(String field, SolrQuery.ORDER order) {
       this.field = field;
@@ -41,8 +52,8 @@ public class SQ {
     public SolrQuery.ORDER order;
   }
 
-  public String query;
-  public SortField[] sort;
-  public int start = 0;
-  public int count = 0;
+  protected String query;
+  protected SortField[] sort;
+  protected int start = 0;
+  protected int count = 10;
 }
