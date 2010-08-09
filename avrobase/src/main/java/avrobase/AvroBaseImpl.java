@@ -55,7 +55,8 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements Av
     do {
       // Grab the current version
       tRow = get(row);
-      // If it doesn't exist, then return null
+
+      // If it doesn't exist, create a new one
       if (tRow == null) {
         final T newValue = tMutator.create();
         if (newValue != null) {
