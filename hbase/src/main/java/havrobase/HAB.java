@@ -183,10 +183,11 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   public byte[] create(T value) throws AvroBaseException {
     switch (createType) {
       case RANDOM: {
-        byte[] row = Bytes.toBytes(random.nextLong());
-        while (!put(row, value, 0)) {
-          // Loop until we find an empty row
-        }
+        // loop until we don't get a random ID collision
+        byte[] row;
+        do {
+          row = Bytes.toBytes(random.nextLong());
+        } while (!put(row, value, 0));
         return row;
       }
       case SEQUENTIAL: {
