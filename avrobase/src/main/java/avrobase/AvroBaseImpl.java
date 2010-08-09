@@ -56,27 +56,13 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements Av
       // Grab the current version
       tRow = get(row);
       // If it doesn't exist, then return null
-      if (tRow == null) return null;
-      T value = tMutator.mutate(tRow.value);
-      // Mutator can abort the mutation
-      if (value == null) return tRow;
-      // Optimistically set the row
-      if (put(row, value, tRow.version)) {
-        return new Row<T, K>(value, row, tRow.version + 1);
-      }
-      // On failure to set, try again
-    } while (true);
-  }
-
-  public Row<T, K> mutate(K row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
-    Row<T, K> tRow;
-    do {
-      // Grab the current version
-      tRow = get(row);
-
-      // If it doesn't exist, create one (locally)
       if (tRow == null) {
-        tRow = new Row<T,K>(tCreator.create(), row, 0);
+        final T newValue = tMutator.create();
+        if (newValue != null) {
+          tRow = new Row<T,K>(newValue, row, 0);
+        } else {
+          throw new AvroBaseException("illegal null value created: " + row);
+        }
       }
 
       T value = tMutator.mutate(tRow.value);

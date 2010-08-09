@@ -80,15 +80,4 @@ public interface AvroBase<T extends SpecificRecord, K, Q> {
    * @throws AvroBaseException
    */
   Row<T, K> mutate(K row, Mutator<T> mutator) throws AvroBaseException;
-
-  /**
-   * Mutate the object and put it back in the AvroBase until success. If the object does not exist,
-   * it is created and then mutated.
-   * 
-   * @param row
-   * @param mutator
-   * @return
-   * @throws AvroBaseException
-   */
-  Row<T, K> mutate(K row, Mutator<T> mutator, Creator<T> creator) throws AvroBaseException;  
 }
