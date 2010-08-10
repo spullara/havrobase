@@ -9,6 +9,7 @@ import org.apache.avro.generic.GenericArray;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.solr.client.solrj.SolrQuery;
+import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
 import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
@@ -132,7 +133,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
     }
     SolrQuery solrQuery = sqh.generateQuery(uniqueKey);    
     try {
-      QueryResponse queryResponse = solrServer.query(solrQuery);
+      QueryResponse queryResponse = solrServer.query(solrQuery, SolrRequest.METHOD.POST);
       SolrDocumentList list = queryResponse.getResults();
       final Iterator<SolrDocument> solrDocumentIterator = list.iterator();
       return new Iterable<Row<T, K>>() {
