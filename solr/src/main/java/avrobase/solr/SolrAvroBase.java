@@ -51,7 +51,6 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
   protected String uniqueKey;
   protected List<String> fields;
 
-  // TODO: Replace this with a better way to commit / optimize
   private volatile long lastCommit = System.currentTimeMillis();
   private volatile long lastOptimize = System.currentTimeMillis();
   private static Timer commitTimer = new Timer();
@@ -237,7 +236,6 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
         commitTimer.schedule(new TimerTask() {
           @Override
           public void run() {
-            // TODO: this needs to be tested to make sure it is committing the last tx
             if (oldLastCommit == lastCommit) {
               lastCommit = System.currentTimeMillis();
               UpdateRequest req = new UpdateRequest();
