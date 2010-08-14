@@ -266,12 +266,13 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       put.add(family, DATA_COLUMN, bytes);
       put.add(family, VERSION_COLUMN, Bytes.toBytes(version + 1));
       put.add(family, FORMAT_COLUMN, Bytes.toBytes(format.ordinal()));
+      final byte[] expectedValue;
       if (version == 0) {
-        table.put(put);
-        index(row, value);
-        return true;
+        expectedValue = new byte[0]; // TODO: bug in HBase (or docs) -- supposed to be null, not 0-length
+      } else {
+        expectedValue = Bytes.toBytes(version);
       }
-      boolean success = table.checkAndPut(row, family, VERSION_COLUMN, Bytes.toBytes(version), put);
+      boolean success = table.checkAndPut(row, family, VERSION_COLUMN, expectedValue, put);
       if (success) {
         index(row, value);
       }
