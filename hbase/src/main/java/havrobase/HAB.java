@@ -161,7 +161,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
     HTableInterface schemaTable;
     HColumnDescriptor family = new HColumnDescriptor(AVRO_FAMILY);
     family.setMaxVersions(1);
-    family.setCompressionType(Compression.Algorithm.NONE);
+    family.setCompressionType(Compression.Algorithm.LZO);
     family.setInMemory(true);
     HTableDescriptor tableDesc = new HTableDescriptor(schemaName);
     tableDesc.addFamily(family);
@@ -533,7 +533,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   private HColumnDescriptor getColumnDesc(byte[] columnFamily) {
     HColumnDescriptor family = new HColumnDescriptor(columnFamily);
     family.setMaxVersions(1);
-    family.setCompressionType(Compression.Algorithm.NONE);
+    family.setCompressionType(Compression.Algorithm.LZO);
     family.setInMemory(false);
     return family;
   }
