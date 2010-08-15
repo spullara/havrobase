@@ -65,8 +65,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
 
   public enum CreateType {
     CUSTOM,
-    RANDOM_INT,
-    RANDOM_LONG,
+    RANDOM,
     SEQUENTIAL,
     TIMESTAMP,
     REVERSE_TIMESTAMP
@@ -101,6 +100,11 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
     this.schemaName = schemaName;
     this.createType = createType;
     this.keygen = keygen;
+
+    if (createType == CreateType.CUSTOM && keygen == null) {
+      throw new IllegalArgumentException("keygen must be non-null");
+    }
+
     HTableInterface schemaTable;
     try {
       schemaTable = pool.getTable(this.schemaName);
@@ -200,15 +204,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
         } while (!put(row, value, 0));
         return row;
       }
-      case RANDOM_INT: {
-        // loop until we don't get a random ID collision
-        byte[] row;
-        do {
-          row = Bytes.toBytes(random.nextInt());
-        } while (!put(row, value, 0));
-        return row;
-      }
-      case RANDOM_LONG: {
+      case RANDOM: {
         // loop until we don't get a random ID collision
         byte[] row;
         do {
