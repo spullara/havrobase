@@ -60,10 +60,13 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   private byte[] family;
   private byte[] schemaName;
   private CreateType createType;
+  private KeyGenerator keygen;
   protected static final TimestampGenerator TIMESTAMP_GENERATOR = new TimestampGenerator();
 
   public enum CreateType {
-    RANDOM,
+    CUSTOM,
+    RANDOM_INT,
+    RANDOM_LONG,
     SEQUENTIAL,
     TIMESTAMP,
     REVERSE_TIMESTAMP
@@ -87,7 +90,8 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       @Named("schema") byte[] schemaName,
       @Named("solr") @Nullable String solrURL,
       AvroFormat format,
-      CreateType createType
+      CreateType createType,
+      KeyGenerator keygen
   ) throws AvroBaseException {
     super(expectedSchema, format, solrURL);
     this.pool = pool;
@@ -96,6 +100,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
     this.family = family;
     this.schemaName = schemaName;
     this.createType = createType;
+    this.keygen = keygen;
     HTableInterface schemaTable;
     try {
       schemaTable = pool.getTable(this.schemaName);
@@ -152,7 +157,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
     HTableInterface schemaTable;
     HColumnDescriptor family = new HColumnDescriptor(AVRO_FAMILY);
     family.setMaxVersions(1);
-    family.setCompressionType(Compression.Algorithm.LZO);
+    family.setCompressionType(Compression.Algorithm.NONE);
     family.setInMemory(true);
     HTableDescriptor tableDesc = new HTableDescriptor(schemaName);
     tableDesc.addFamily(family);
@@ -187,7 +192,23 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   @Override
   public byte[] create(T value) throws AvroBaseException {
     switch (createType) {
-      case RANDOM: {
+      case CUSTOM: {
+        // loop until we don't get a random ID collision
+        byte[] row;
+        do {
+          row = keygen.generate();
+        } while (!put(row, value, 0));
+        return row;
+      }
+      case RANDOM_INT: {
+        // loop until we don't get a random ID collision
+        byte[] row;
+        do {
+          row = Bytes.toBytes(random.nextInt());
+        } while (!put(row, value, 0));
+        return row;
+      }
+      case RANDOM_LONG: {
         // loop until we don't get a random ID collision
         byte[] row;
         do {
@@ -273,7 +294,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       put.add(family, FORMAT_COLUMN, Bytes.toBytes(format.ordinal()));
       final byte[] expectedValue;
       if (version == 0) {
-        expectedValue = new byte[0]; // TODO: bug in HBase (or docs) -- supposed to be null, not 0-length
+        expectedValue = null; //new byte[0]; // TODO: bug in HBase (or docs) -- supposed to be null, not 0-length
       } else {
         expectedValue = Bytes.toBytes(version);
       }
@@ -516,7 +537,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   private HColumnDescriptor getColumnDesc(byte[] columnFamily) {
     HColumnDescriptor family = new HColumnDescriptor(columnFamily);
     family.setMaxVersions(1);
-    family.setCompressionType(Compression.Algorithm.LZO);
+    family.setCompressionType(Compression.Algorithm.NONE);
     family.setInMemory(false);
     return family;
   }
