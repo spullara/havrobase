@@ -197,7 +197,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   public byte[] create(T value) throws AvroBaseException {
     switch (createType) {
       case CUSTOM: {
-        // loop until we don't get a random ID collision
+        // loop until we don't get an ID collision
         byte[] row;
         do {
           row = keygen.generate();
@@ -290,7 +290,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       put.add(family, FORMAT_COLUMN, Bytes.toBytes(format.ordinal()));
       final byte[] expectedValue;
       if (version == 0) {
-        expectedValue = null; //new byte[0]; // TODO: bug in HBase (or docs) -- supposed to be null, not 0-length
+        expectedValue = new byte[0]; // TODO: should be null, but... HBASE-2920
       } else {
         expectedValue = Bytes.toBytes(version);
       }
