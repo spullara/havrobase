@@ -66,8 +66,8 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
    * @param solrURL
    * @throws avrobase.AvroBaseException
    */
-  public SolrAvroBase(AvroFormat format, String solrURL) throws AvroBaseException {
-    super(format);
+  public SolrAvroBase(Schema expectedSchema, AvroFormat format, String solrURL) throws AvroBaseException {
+    super(expectedSchema, format);
     if (solrURL != null) {
       try {
         solrServer = new CommonsHttpSolrServer(solrURL);

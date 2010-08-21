@@ -75,6 +75,7 @@ public class HABTest {
 
     @Override
     public void configure(Binder binder) {
+      binder.bind(Schema.class).toInstance(User.SCHEMA$);
       binder.bind(byte[].class).annotatedWith(Names.named("schema")).toInstance(SCHEMA_TABLE);
       binder.bind(byte[].class).annotatedWith(Names.named("table")).toInstance(TABLE);
       binder.bind(byte[].class).annotatedWith(Names.named("family")).toInstance(COLUMN_FAMILY);

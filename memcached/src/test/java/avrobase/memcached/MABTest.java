@@ -12,6 +12,7 @@ import com.danga.MemCached.SockIOPool;
 import com.google.inject.Binder;
 import com.google.inject.Module;
 import com.google.inject.name.Names;
+import org.apache.avro.Schema;
 import org.apache.avro.util.Utf8;
 import org.junit.Test;
 
@@ -42,6 +43,7 @@ public class MABTest {
     @Override
     public void configure(Binder binder) {
       binder.bind(MemCachedClient.class).toInstance(new MemCachedClient(true));
+      binder.bind(Schema.class).toInstance(User.SCHEMA$);
       binder.bind(String.class).annotatedWith(Names.named("schema")).toInstance("test_schema");
       binder.bind(String.class).annotatedWith(Names.named("table")).toInstance("test_user");
       binder.bind(String.class).annotatedWith(Names.named("family")).toInstance("profile");

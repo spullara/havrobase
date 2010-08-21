@@ -26,13 +26,14 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String, Strin
 
   @Inject
   public MAB(
-          MemCachedClient client,
-          @Named("table") String table,
-          @Named("family") String family,
-          @Named("schema") String schemaPrekey,
-          AvroFormat format
+      Schema expectedFormat,
+      MemCachedClient client,
+      @Named("table") String table,
+      @Named("family") String family,
+      @Named("schema") String schemaPrekey,
+      AvroFormat format
   ) {
-    super(format);
+    super(expectedFormat, format);
     this.client = client;
     prekey = new StringBuilder().append(table).append(":").append(family).append(":").toString();
     this.schemaPrekey = new StringBuilder(schemaPrekey).append(":").toString();
@@ -43,13 +44,13 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String, Strin
     MemcachedItem memcachedItem = client.gets(prekey + row);
     long version = memcachedItem.getCasUnique();
     byte[] bytes = (byte[]) memcachedItem.getValue();
-    String schemaKey = new String((byte[])client.get(prekey + schemaPrekey + row));
+    String schemaKey = new String((byte[]) client.get(prekey + schemaPrekey + row));
     Schema schema = schemaCache.get(schemaKey);
     if (schema == null) {
       byte[] schemab = (byte[]) client.get(schemaPrekey + schemaKey);
       schema = loadSchema(schemab, schemaKey);
     }
-    return new Row<T, String>(readValue(bytes, schema, format), row, version) ;
+    return new Row<T, String>(readValue(bytes, schema, format), row, version);
   }
 
   @Override

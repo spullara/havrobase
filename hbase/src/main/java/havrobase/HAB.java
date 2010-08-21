@@ -79,6 +79,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
    */
   @Inject
   public HAB(
+      Schema expectedSchema,
       HTablePool pool,
       HBaseAdmin admin,
       @Named("table") byte[] tableName,
@@ -88,7 +89,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       AvroFormat format,
       CreateType createType
   ) throws AvroBaseException {
-    super(format, solrURL);
+    super(expectedSchema, format, solrURL);
     this.pool = pool;
     this.admin = admin;
     this.tableName = tableName;
