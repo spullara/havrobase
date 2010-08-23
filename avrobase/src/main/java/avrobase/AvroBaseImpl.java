@@ -139,7 +139,8 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements Av
    * Read the avro serialized data using the specified schema and format
    * in the hbase row
    */
-  protected T readValue(byte[] latest, Schema schema, AvroFormat format) throws AvroBaseException {
+  protected T
+  readValue(byte[] latest, Schema schema, AvroFormat format) throws AvroBaseException {
     try {
       Decoder d;
       switch (format) {
@@ -152,8 +153,8 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements Av
           d = factory.createBinaryDecoder(new ByteArrayInputStream(latest), null);
           break;
       }
-      SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(schema);
-      if (expectedSchema != null) sdr.setExpected(expectedSchema);
+      SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(expectedSchema != null ? expectedSchema : schema);
+      sdr.setSchema(schema);
       return sdr.read(null, d);
     } catch (IOException e) {
       throw new AvroBaseException("Failed to read value", e);
