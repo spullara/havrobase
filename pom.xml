@@ -10,6 +10,7 @@
     <module>solr</module>
     <module>hbase</module>
     <module>memcached</module>
+    <module>mysql</module>
   </modules>
   <packaging>pom</packaging>
 
