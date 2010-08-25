@@ -32,7 +32,7 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements Av
 
   protected Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
   protected Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();
-  private Schema expectedSchema;
+  private Schema actualSchema;
   protected AvroFormat format;
 
   protected static final Charset UTF8 = Charset.forName("utf-8");
@@ -44,8 +44,8 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements Av
    *
    * @param format
    */
-  public AvroBaseImpl(Schema expectedSchema, AvroFormat format) {
-    this.expectedSchema = expectedSchema;
+  public AvroBaseImpl(Schema actualSchema, AvroFormat format) {
+    this.actualSchema = actualSchema;
     this.format = format;
   }
 
@@ -153,8 +153,8 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements Av
           d = factory.createBinaryDecoder(new ByteArrayInputStream(latest), null);
           break;
       }
-      SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(expectedSchema != null ? expectedSchema : schema);
-      sdr.setSchema(schema);
+      SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(actualSchema);
+      sdr.setExpected(schema);
       return sdr.read(null, d);
     } catch (IOException e) {
       throw new AvroBaseException("Failed to read value", e);
