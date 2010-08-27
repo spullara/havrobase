@@ -134,6 +134,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
     try {
       QueryResponse queryResponse = solrServer.query(solrQuery, SolrRequest.METHOD.POST);
       SolrDocumentList list = queryResponse.getResults();
+      sqh.setTotal(list.getNumFound());
       final Iterator<SolrDocument> solrDocumentIterator = list.iterator();
       return new Iterable<Row<T, K>>() {
 

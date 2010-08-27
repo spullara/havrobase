@@ -56,4 +56,8 @@ public class SQ {
   protected SortField[] sort;
   protected int start = 0;
   protected int count = 10;
+
+  private long total;
+  public void setTotal(long total) { this.total = total; }
+  public long getTotal() {return total;}
 }
