@@ -315,7 +315,11 @@ public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, 
           AvroFormat format = AvroFormat.values()[rs.getByte(3)];
           byte[] avro = rs.getBytes(4);
           Schema schema = getSchema(schema_id);
-          return new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version);
+          if (schema != null) {
+            return new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version);
+          } else {
+            throw new AvroBaseException("Failed to find schema: " + schema_id);
+          }
         } else {
           return null;
         }
@@ -346,7 +350,7 @@ public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, 
             String hash = new String(rs.getBytes(2));
             return loadSchema(schema_id, hash, rs.getBytes(3));
           } else {
-            throw new AvroBaseException("Failed to find schema: " + schema_id);
+            return null;
           }
         }
       }.query();
@@ -464,7 +468,12 @@ public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, 
           AvroFormat format = AvroFormat.values()[rs.getByte(4)];
           byte[] avro = rs.getBytes(5);
           Schema schema = getSchema(schema_id);
-          rows.add(new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version));
+          if (schema != null) {
+            rows.add(new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version));
+          } else {
+            // TODO: logging
+            System.err.println("skipped row because of missing schema: " + keytx.fromBytes(row) + " schema " + schema_id);
+          }
         }
         return rows;
       }
