@@ -170,6 +170,10 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
     HTableInterface table = getTable();
     try {
       Result result = getHBaseRow(table, row, family);
+      // TODO: This is working around a bug in HBASE 0.89
+      if (row.length == 0 && !Bytes.equals(row, result.getRow())) {
+        return null;
+      }
       return getRowResult(result, row);
     } catch (IOException e) {
       throw new AvroBaseException(e);
