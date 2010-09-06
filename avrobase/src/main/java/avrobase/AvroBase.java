@@ -76,8 +76,25 @@ public interface AvroBase<T extends SpecificRecord, K, Q> {
    * Mutate the object and put it back in the AvroBase until success.
    * @param row
    * @param mutator
-   * @return
+   * @return the mutated value.
    * @throws AvroBaseException
    */
   Row<T, K> mutate(K row, Mutator<T> mutator) throws AvroBaseException;
+
+  /**
+   * Mutate the object and put it back in the AvroBase until success. Same as mutate(K,Mutator<T>),
+   * except this will call the given creator if the specified row does not exist. If the row
+   * does not exist, the creator will create a new object, and then the mutator will mutate and
+   * put it.
+   *
+   * @param row
+   * @param mutator
+   * @param creator If the object to mutate does not exist, and a creator is provided, the
+   * creator will be used to create a new instance. Mutate will then be used on the newly
+   * created instance.
+   * @return the mutated value. Returns null only if the row was not found and a creator
+   * was not provided (or the creator returned null).
+   * @throws AvroBaseException
+   */
+  Row<T, K> mutate(K row, Mutator<T> mutator, Creator<T> creator) throws AvroBaseException;
 }

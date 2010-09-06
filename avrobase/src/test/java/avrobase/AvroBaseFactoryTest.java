@@ -71,6 +71,11 @@ public class AvroBaseFactoryTest {
     public Row<SpecificRecord, byte[]> mutate(byte[] row, Mutator<SpecificRecord> specificRecordMutator) throws AvroBaseException {
       return null;
     }
+
+    @Override
+    public Row<SpecificRecord, byte[]> mutate(byte[] row, Mutator<SpecificRecord> specificRecordMutator, Creator<SpecificRecord> specificRecordCreator) throws AvroBaseException {
+      return null;
+    }
   }
 
   @Test

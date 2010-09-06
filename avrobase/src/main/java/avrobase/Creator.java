@@ -7,5 +7,8 @@ package avrobase;
  * Time: 2:00:21 PM
  */
 public interface Creator<T> {
+  /**
+   * @return new T; null never allowed
+   */
   T create();
 }

@@ -17,12 +17,4 @@ public interface Mutator<T> {
    * @return the mutated value, or null if there is no work to be done.
    */
   T mutate(T value);
-
-  /**
-   * Creates a new instance if the object to be mutated does
-   * not yet exist. mutate() will be called subsequently.
-   *
-   * @return non-null new value.
-   */
-  T create();
 }

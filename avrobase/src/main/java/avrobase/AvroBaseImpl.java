@@ -50,31 +50,38 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements Av
   }
 
   @Override
-  public Row<T, K> mutate(K row, Mutator<T> tMutator) throws AvroBaseException {
+  public Row<T, K> mutate(K row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
     Row<T, K> tRow;
     do {
       // Grab the current version
       tRow = get(row);
 
       // If it doesn't exist, create a new one
-      if (tRow == null) {
-        final T newValue = tMutator.create();
+      if (tRow == null && tCreator != null) {
+        final T newValue = tCreator.create();
         if (newValue != null) {
           tRow = new Row<T,K>(newValue, row, 0);
-        } else {
-          throw new AvroBaseException("illegal null value created: " + row);
         }
       }
 
-      T value = tMutator.mutate(tRow.value);
-      // Mutator can abort the mutation
-      if (value == null) return tRow;
-      // Optimistically set the row
-      if (put(row, value, tRow.version)) {
-        return new Row<T, K>(value, row, tRow.version + 1);
+      if (tRow != null) {
+        T value = tMutator.mutate(tRow.value);
+        // Mutator can abort the mutation
+        if (value == null) return tRow;
+        // Optimistically set the row
+        if (put(row, value, tRow.version)) {
+          return new Row<T, K>(value, row, tRow.version + 1);
+        }
+      } else {
+        return null;
       }
       // On failure to set, try again
     } while (true);
+  }
+
+  @Override
+  public Row<T, K> mutate(K row, Mutator<T> tMutator) throws AvroBaseException {
+    return mutate(row, tMutator, null);
   }
 
   /**
