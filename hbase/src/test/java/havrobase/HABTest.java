@@ -82,6 +82,12 @@ public class HABTest {
 //      binder.bind(String.class).annotatedWith(Names.named("solr")).toInstance("http://localhost:8983/solr/user");
       binder.bind(String.class).annotatedWith(Names.named("solr")).toProvider(NULL_STRING_PROVIDER);
       binder.bind(HAB.CreateType.class).toInstance(HAB.CreateType.SEQUENTIAL);
+      binder.bind(KeyGenerator.class).toProvider(new Provider<KeyGenerator>() {
+        @Override
+        public KeyGenerator get() {
+          return null;
+        }
+      });
       binder.bind(HTablePool.class).toInstance(new HTablePool());
       binder.bind(HBaseAdmin.class).toInstance(admin);
     }

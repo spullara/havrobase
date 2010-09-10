@@ -90,7 +90,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       @Named("solr") @Nullable String solrURL,
       AvroFormat format,
       CreateType createType,
-      KeyGenerator keygen
+      @Nullable KeyGenerator keygen
   ) throws AvroBaseException {
     super(expectedSchema, format, solrURL);
     this.pool = pool;
