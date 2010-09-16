@@ -11,11 +11,11 @@ import org.apache.avro.specific.SpecificRecord;
  *
  * @author john
  */
-public abstract class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingAvroBase<T, K, Q>  {
+public abstract class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingAvroBase<T, K>  {
   private final Index<T,K,Q> index;
 
   @Inject
-  public IndexedAvroBase(final AvroBase<T, K, Q> delegate, final Index<T, K, Q> index) {
+  public IndexedAvroBase(final AvroBase<T, K> delegate, final Index<T, K, Q> index) {
     super(delegate);
     this.index = index;
   }
@@ -68,7 +68,6 @@ public abstract class IndexedAvroBase<T extends SpecificRecord, K, Q> extends Fo
    * @return
    * @throws AvroBaseException
    */
-  @Override
   public Iterable<Row<T, K>> search(Q query) throws AvroBaseException {
     return Iterables.transform(index.search(query), new Function<K, Row<T,K>>() {
       @Override

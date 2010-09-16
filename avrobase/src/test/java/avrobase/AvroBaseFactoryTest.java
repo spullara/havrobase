@@ -19,7 +19,7 @@ import static org.junit.Assert.assertTrue;
  * Time: 5:29:26 PM
  */
 public class AvroBaseFactoryTest {
-  public static class TestAvroBase<K> implements AvroBase<SpecificRecord, byte[], String> {
+  public static class TestAvroBase<K> implements AvroBase<SpecificRecord, byte[]> {
 
     public boolean inited;
     private byte[] table;
@@ -59,11 +59,6 @@ public class AvroBaseFactoryTest {
 
     @Override
     public Iterable<Row<SpecificRecord, byte[]>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
-      return null;
-    }
-
-    @Override
-    public Iterable<Row<SpecificRecord, byte[]>> search(String query) throws AvroBaseException {
       return null;
     }
 

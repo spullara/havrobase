@@ -52,7 +52,7 @@ public class MABTest {
 
   @Test
   public void testSave() throws AvroBaseException {
-    AvroBase<User, String, String> userHAB = AvroBaseFactory.createAvroBase(new MABModule(), MAB.class, AvroFormat.BINARY);
+    AvroBase<User, String> userHAB = AvroBaseFactory.createAvroBase(new MABModule(), MAB.class, AvroFormat.BINARY);
     User saved = new User();
     saved.firstName = $("Sam");
     saved.lastName = $("Pullara");

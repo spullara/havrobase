@@ -4,8 +4,6 @@ import com.google.inject.Binder;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
-import com.google.inject.TypeLiteral;
-import com.google.inject.name.Names;
 import org.apache.avro.specific.SpecificRecord;
 
 /**
@@ -16,7 +14,7 @@ import org.apache.avro.specific.SpecificRecord;
  * Time: 11:51:40 AM
  */
 public class AvroBaseFactory {
-  public static <T extends SpecificRecord, K, Q> AvroBase<T, K, Q> createAvroBase(Module module, Class<? extends AvroBase> clazz, final AvroFormat format) throws AvroBaseException {
+  public static <T extends SpecificRecord, K, Q> AvroBase<T, K> createAvroBase(Module module, Class<? extends AvroBase> clazz, final AvroFormat format) throws AvroBaseException {
     Injector injector = Guice.createInjector(module);
     return injector.createChildInjector(new Module() {
       @Override

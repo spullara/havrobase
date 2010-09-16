@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Time: 1:59:33 PM
  * TODO: consider column-type-specific support (via keytx)
  */
-public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, Q> implements AvroBase<T, K, Q> {
+public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   private final DataSource datasource;
   private final AvroFormat storageFormat;
   private final String mysqlTableName;
@@ -189,11 +189,6 @@ public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, 
   @Override
   public Iterable<Row<T, K>> scan(K startRow, K stopRow) throws AvroBaseException {
     return scan(startRow != null ? keytx.toBytes(startRow) : null, stopRow != null ? keytx.toBytes(stopRow) : null);
-  }
-
-  @Override
-  public Iterable<Row<T, K>> search(Q query) throws AvroBaseException {
-    throw new NotImplementedException();
   }
 
   private abstract class Update {

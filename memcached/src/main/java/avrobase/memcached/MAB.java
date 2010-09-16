@@ -98,9 +98,4 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String, Strin
   public Iterable<Row<T, String>> scan(String startRow, String stopRow) throws AvroBaseException {
     throw new NotImplementedException();
   }
-
-  @Override
-  public Iterable<Row<T, String>> search(String query) throws AvroBaseException {
-    throw new NotImplementedException();
-  }
 }

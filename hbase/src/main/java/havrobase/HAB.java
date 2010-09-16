@@ -1,7 +1,12 @@
 package havrobase;
 
-import avrobase.*;
+import avrobase.AvroBaseException;
+import avrobase.AvroBaseImpl;
+import avrobase.AvroFormat;
+import avrobase.KeyGenerator;
+import avrobase.Row;
 import com.google.inject.Inject;
+import com.google.inject.internal.Nullable;
 import com.google.inject.name.Named;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
@@ -39,7 +44,7 @@ import java.util.Random;
  * Date: Jun 8, 2010
  * Time: 5:13:35 PM
  */
-public class HAB<T extends SpecificRecord, Q> extends AvroBaseImpl<T, byte[], Q> {
+public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
 
   // Avro Table Constants
   private final byte[] VERSION_COLUMN = $("v");
@@ -373,11 +378,6 @@ public class HAB<T extends SpecificRecord, Q> extends AvroBaseImpl<T, byte[], Q>
       // FIXME: Is this safe?
       pool.putTable(table);
     }
-  }
-
-  @Override
-  public Iterable<Row<T, byte[]>> search(Q query) throws AvroBaseException {
-    throw new UnsupportedOperationException();
   }
 
   // Given an HBase row result take it apart and populate the Row wrapper metadata.

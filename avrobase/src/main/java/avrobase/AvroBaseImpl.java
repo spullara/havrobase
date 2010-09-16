@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Date: Jun 23, 2010
  * Time: 12:21:33 PM
  */
-public abstract class AvroBaseImpl<T extends SpecificRecord, K, Q> implements AvroBase<T, K, Q> {
+public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroBase<T, K> {
 
   protected Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
   protected Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();

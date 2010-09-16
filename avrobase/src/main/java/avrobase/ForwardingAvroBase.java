@@ -10,10 +10,10 @@ import org.apache.avro.specific.SpecificRecord;
  * @param <K>
  * @param <Q>
  */
-public abstract class ForwardingAvroBase<T extends SpecificRecord, K, Q> extends ForwardingObject implements AvroBase<T, K, Q> {
-  private final AvroBase<T, K, Q> delegate;
+public abstract class ForwardingAvroBase<T extends SpecificRecord, K> extends ForwardingObject implements AvroBase<T, K> {
+  private final AvroBase<T, K> delegate;
 
-  public ForwardingAvroBase(AvroBase<T, K, Q> delegate) {
+  public ForwardingAvroBase(AvroBase<T, K> delegate) {
     this.delegate = delegate;
   }
 
@@ -41,10 +41,6 @@ public abstract class ForwardingAvroBase<T extends SpecificRecord, K, Q> extends
     return delegate.scan(startRow, stopRow);
   }
 
-  public Iterable<Row<T, K>> search(Q query) throws AvroBaseException {
-    return delegate.search(query);
-  }
-
   public Row<T, K> mutate(K row, Mutator<T> tMutator) throws AvroBaseException {
     return delegate.mutate(row, tMutator);
   }
@@ -54,7 +50,7 @@ public abstract class ForwardingAvroBase<T extends SpecificRecord, K, Q> extends
   }
 
   @Override
-  protected AvroBase<T,K,Q> delegate() {
+  protected AvroBase<T,K> delegate() {
     return delegate;
   }
 }
