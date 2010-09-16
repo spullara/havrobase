@@ -2,6 +2,7 @@ package avrobase.solr;
 
 import avrobase.*;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Iterables;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.specific.SpecificRecord;
@@ -35,7 +36,7 @@ import java.util.*;
  *
  * @author sam, http://github.com/beatty
  */
-public class SolrIndex<K, T extends SpecificRecord> implements Index<K, T, SQ> {
+public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
   private static final String SCHEMA_LOCATION = "/admin/file/?file=schema.xml";
   private final SolrServer solrServer;
   private final String uniqueKey;
@@ -159,6 +160,17 @@ public class SolrIndex<K, T extends SpecificRecord> implements Index<K, T, SQ> {
       };
     } catch (SolrServerException e) {
       throw new AvroBaseException("Query failure: " + sqh.query, e);
+    }
+  }
+
+  @Override
+  public K searchUnique(SQ query) {
+    final Iterable<K> results = search(query);
+
+    try {
+      return Iterables.getOnlyElement(results, null);
+    } catch (IllegalArgumentException e) {
+      throw new AvroBaseException("Too many results");
     }
   }
 

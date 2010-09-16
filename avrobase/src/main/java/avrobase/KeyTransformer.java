@@ -8,4 +8,6 @@ package avrobase;
 public interface KeyTransformer<K> {
   String toString(K key);
   K fromString(String keyString);
+  byte[] toBytes(K key);
+  K fromBytes(byte[] keyBytes);
 }

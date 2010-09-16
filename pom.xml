@@ -11,6 +11,7 @@
     <module>hbase</module>
     <module>memcached</module>
     <module>mysql</module>
+    <!-- <module>redis</module> -->
   </modules>
   <packaging>pom</packaging>
 

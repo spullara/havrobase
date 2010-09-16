@@ -12,10 +12,10 @@ import org.apache.avro.specific.SpecificRecord;
  * @author john
  */
 public abstract class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingAvroBase<T, K, Q>  {
-  private final Index<K,T,Q> index;
+  private final Index<T,K,Q> index;
 
   @Inject
-  public IndexedAvroBase(final AvroBase<T, K, Q> delegate, final Index<K, T, Q> index) {
+  public IndexedAvroBase(final AvroBase<T, K, Q> delegate, final Index<T, K, Q> index) {
     super(delegate);
     this.index = index;
   }

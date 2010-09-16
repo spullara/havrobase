@@ -13,7 +13,7 @@ import org.apache.avro.specific.SpecificRecord;
  *
  * @author john
  */
-public interface Index<K, T extends SpecificRecord, Q> {
+public interface Index<T extends SpecificRecord, K, Q> {
   /**
    * Indexes the given row. Any existing index data is removed/replaced.
    * @param row
@@ -36,4 +36,11 @@ public interface Index<K, T extends SpecificRecord, Q> {
    * @return keys that match the query
    */
   Iterable<K> search(Q query);
+
+  /**
+   * Queries and returns the matching key, if any.
+   * @param query
+   * @return The key, or null if there is no matching key.
+   */
+  K searchUnique(Q query);
 }
