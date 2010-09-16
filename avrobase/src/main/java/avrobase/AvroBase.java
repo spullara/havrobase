@@ -64,9 +64,6 @@ public interface AvroBase<T extends SpecificRecord, K, Q> {
   /**
    * Search the set of objects in the system.
    * @param query
-   * @param sort
-   * @param start
-   * @param rows
    * @return
    * @throws AvroBaseException
    */

@@ -40,7 +40,6 @@ public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, 
 
   // Caches
   private Map<Integer, Schema> abbrevSchema = new ConcurrentHashMap<Integer, Schema>();
-  private Map<String, Schema> lookupSchema = new ConcurrentHashMap<String, Schema>();
   private Map<Schema, Integer> schemaAbbrev = new ConcurrentHashMap<Schema, Integer>();
 
   @Inject
@@ -150,7 +149,6 @@ public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, 
           }.insert();
         }
         abbrevSchema.put(id, schema);
-        lookupSchema.put(schemaKey, schema);
         schemaAbbrev.put(schema, id);
       }
     }
@@ -327,16 +325,6 @@ public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, 
     }.query();
   }
 
-  @Override
-  protected K $(String key) {
-    return keytx.fromString(key);
-  }
-
-  @Override
-  protected String $_(K key) {
-    return keytx.toString(key);
-  }
-
   private synchronized Schema getSchema(final int schema_id) throws AvroBaseException {
     Schema schema = abbrevSchema.get(schema_id);
     if (schema == null) {
@@ -366,7 +354,6 @@ public class MysqlAB<T extends SpecificRecord, K, Q> extends AvroBaseImpl<T, K, 
       throw new AvroBaseException("Could not parse the schema", e);
     }
     abbrevSchema.put(id, schema);
-    lookupSchema.put(hash, schema);
     schemaAbbrev.put(schema, id);
     return schema;
   }

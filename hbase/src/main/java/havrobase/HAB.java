@@ -1,11 +1,7 @@
 package havrobase;
 
-import avrobase.AvroBaseException;
-import avrobase.AvroFormat;
-import avrobase.Row;
-import avrobase.solr.SolrAvroBase;
+import avrobase.*;
 import com.google.inject.Inject;
-import com.google.inject.internal.Nullable;
 import com.google.inject.name.Named;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
@@ -35,12 +31,15 @@ import java.util.Random;
 
 /**
  * HAvroBase client.
+ *
+ * TODO: remove createType, use KeyGenerator in avrobase exclusively
+ *
  * <p/>
  * User: sam
  * Date: Jun 8, 2010
  * Time: 5:13:35 PM
  */
-public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
+public class HAB<T extends SpecificRecord, Q> extends AvroBaseImpl<T, byte[], Q> {
 
   // Avro Table Constants
   private final byte[] VERSION_COLUMN = $("v");
@@ -60,7 +59,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
   private byte[] family;
   private byte[] schemaName;
   private CreateType createType;
-  private KeyGenerator keygen;
+  private KeyGenerator<byte[]> keygen;
   protected static final TimestampGenerator TIMESTAMP_GENERATOR = new TimestampGenerator();
 
   public enum CreateType {
@@ -87,12 +86,11 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       @Named("table") byte[] tableName,
       @Named("family") byte[] family,
       @Named("schema") byte[] schemaName,
-      @Named("solr") @Nullable String solrURL,
       AvroFormat format,
       CreateType createType,
-      @Nullable KeyGenerator keygen
+      @Nullable KeyGenerator<byte[]> keygen
   ) throws AvroBaseException {
-    super(expectedSchema, format, solrURL);
+    super(expectedSchema, format);
     this.pool = pool;
     this.admin = admin;
     this.tableName = tableName;
@@ -268,7 +266,6 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
         // FIXME: Spin until success, last one wins. Provably dangerous?
         version = getVersion(family, row, table);
       } while (!put(row, value, version));
-      index(row, value);
     } catch (IOException e) {
       throw new AvroBaseException("Failed to retrieve version for row: " + $_(row), e);
     } finally {
@@ -294,11 +291,7 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       } else {
         expectedValue = Bytes.toBytes(version);
       }
-      boolean success = table.checkAndPut(row, family, VERSION_COLUMN, expectedValue, put);
-      if (success) {
-        index(row, value);
-      }
-      return success;
+      return table.checkAndPut(row, family, VERSION_COLUMN, expectedValue, put);
     } catch (IOException e) {
       throw new AvroBaseException("Could not encode " + value, e);
     } finally {
@@ -313,7 +306,6 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       Delete delete = new Delete(row);
       delete.deleteFamily(family);
       table.delete(delete);
-      unindex(row);
     } catch (IOException e) {
       throw new AvroBaseException("Failed to delete row", e);
     } finally {
@@ -381,6 +373,11 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
       // FIXME: Is this safe?
       pool.putTable(table);
     }
+  }
+
+  @Override
+  public Iterable<Row<T, byte[]>> search(Q query) throws AvroBaseException {
+    throw new UnsupportedOperationException();
   }
 
   // Given an HBase row result take it apart and populate the Row wrapper metadata.
@@ -538,12 +535,10 @@ public class HAB<T extends SpecificRecord> extends SolrAvroBase<T, byte[]> {
     return family;
   }
 
-  @Override
   protected byte[] $(String string) {
     return Bytes.toBytes(string);
   }
 
-  @Override
   protected String $_(byte[] bytes) {
     return Bytes.toString(bytes);
   }

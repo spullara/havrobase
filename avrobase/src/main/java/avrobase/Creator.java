@@ -2,9 +2,7 @@ package avrobase;
 
 /**
  * Creates objects.
- * User: john
- * Date: Aug 9, 2010
- * Time: 2:00:21 PM
+ * @author john
  */
 public interface Creator<T> {
   /**

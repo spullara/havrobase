@@ -1,9 +1,7 @@
 package avrobase.solr;
 
-import avrobase.AvroBaseException;
-import avrobase.AvroBaseImpl;
-import avrobase.AvroFormat;
-import avrobase.Row;
+import avrobase.*;
+import com.google.common.base.Preconditions;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.specific.SpecificRecord;
@@ -30,94 +28,86 @@ import javax.xml.parsers.ParserConfigurationException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 
 /**
- * Implement search via Solr. Extend this class instead of the AvroBaseImpl and use the index methods
- * upon successful insertions into your avrobase.
- * <p/>
- * User: sam
- * Date: Jun 27, 2010
- * Time: 10:50:31 AM
+ * An AvroBase that provides Solr indexing
+ *
+ * @author sam, http://github.com/beatty
  */
-public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBaseImpl<T, K, SQ> {
+public class SolrIndex<K, T extends SpecificRecord> implements Index<K, T, SQ> {
   private static final String SCHEMA_LOCATION = "/admin/file/?file=schema.xml";
-  protected SolrServer solrServer;
-  protected String uniqueKey;
-  protected List<String> fields;
+  private final SolrServer solrServer;
+  private final String uniqueKey;
+  private final List<String> fields;
+  private final KeyTransformer<K> keyTx;
 
   private volatile long lastCommit = System.currentTimeMillis();
   private volatile long lastOptimize = System.currentTimeMillis();
   private static Timer commitTimer = new Timer();
 
-  /**
-   * Given a solr url this constructor will pull the schema and use that to index
-   * values when the index function is called. The search method then can query the
-   * indexed objects and return them. The Solr configuration is the single source
-   * of configuration for which fields are indexed.  The uniquekey has to be a string
-   * converted via utf-8 from the row id.
-   *
-   * @param format
-   * @param solrURL
-   * @throws avrobase.AvroBaseException
-   */
-  public SolrAvroBase(Schema expectedSchema, AvroFormat format, String solrURL) throws AvroBaseException {
-    super(expectedSchema, format);
-    if (solrURL != null) {
-      try {
-        solrServer = new CommonsHttpSolrServer(solrURL);
-        URL url = new URL(solrURL + SolrAvroBase.SCHEMA_LOCATION);
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        DocumentBuilder db = dbf.newDocumentBuilder();
-        Document document = db.parse(url.openStream());
+  public SolrIndex(String solrURL, KeyTransformer<K> keyTx) {
+    this.keyTx = keyTx;
+    Preconditions.checkNotNull(solrURL);
 
-        // Need to get the unique key and all the fields
-        NodeList uniqueKeys = document.getElementsByTagName("uniqueKey");
-        if (uniqueKeys == null || uniqueKeys.getLength() != 1) {
-          throw new AvroBaseException("Invalid schema configuration, must have 1 unique key");
-        }
-        uniqueKey = uniqueKeys.item(0).getTextContent();
+    try {
+      solrServer = new CommonsHttpSolrServer(solrURL);
+      URL url = new URL(solrURL + SCHEMA_LOCATION);
+      DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+      DocumentBuilder db = dbf.newDocumentBuilder();
+      Document document = db.parse(url.openStream());
 
-        // Now get all the fields we are going to index and query
-        NodeList fieldList = document.getElementsByTagName("field");
-        fields = new ArrayList<String>(fieldList.getLength());
-        for (int i = 0; i < fieldList.getLength(); i++) {
-          Node field = fieldList.item(i);
-          String name = field.getAttributes().getNamedItem("name").getTextContent();
-          fields.add(name);
-        }
-      } catch (MalformedURLException e) {
-        throw new AvroBaseException("Invalid Solr URL: " + solrURL, e);
-      } catch (ParserConfigurationException e) {
-        throw new AvroBaseException(e);
-      } catch (SAXException e) {
-        throw new AvroBaseException("Failed to parse schema", e);
-      } catch (IOException e) {
-        throw new AvroBaseException("Failed to read schema", e);
+      // Need to get the unique key and all the fields
+      NodeList uniqueKeys = document.getElementsByTagName("uniqueKey");
+      if (uniqueKeys == null || uniqueKeys.getLength() != 1) {
+        throw new AvroBaseException("Invalid schema configuration, must have 1 unique key");
       }
+      uniqueKey = uniqueKeys.item(0).getTextContent();
+
+      // Now get all the fields we are going to index and query
+      NodeList fieldList = document.getElementsByTagName("field");
+      fields = new ArrayList<String>(fieldList.getLength());
+      for (int i = 0; i < fieldList.getLength(); i++) {
+        Node field = fieldList.item(i);
+        String name = field.getAttributes().getNamedItem("name").getTextContent();
+        fields.add(name);
+      }
+    } catch (MalformedURLException e) {
+      throw new AvroBaseException("Invalid Solr URL: " + solrURL, e);
+    } catch (ParserConfigurationException e) {
+      throw new AvroBaseException(e);
+    } catch (SAXException e) {
+      throw new AvroBaseException("Failed to parse schema", e);
+    } catch (IOException e) {
+      throw new AvroBaseException("Failed to read schema", e);
     }
   }
 
+
   /**
-   * Query the solr instance and return matching documents in score order. Should we
-   * return only stored fields or load them automatically?
+   * Remove an id from the index.
    *
-   * @param query
-   * @param start
-   * @param rows
-   * @return
-   * @throws avrobase.AvroBaseException
+   * @param row
+   * @throws AvroBaseException
    */
-  @Override
-  public Iterable<Row<T, K>> search(SQ sqh) throws AvroBaseException {
+  public void unindex(K row) throws AvroBaseException {
     if (solrServer == null) {
-      throw new AvroBaseException("Searching for this type is not enabled");
+      return;
     }
+
+    // TODO: do we really want to throw an exception on index failure??
+    try {
+      solrServer.deleteById(keyTx.toString(row));
+      solrServer.commit();
+    } catch (SolrServerException e) {
+      throw new AvroBaseException(e);
+    } catch (IOException e) {
+      throw new AvroBaseException(e);
+    }
+  }
+
+  @Override
+  public Iterable<K> search(SQ sqh) {
     // TODO: If we haven't indexed since the last update, index now. Once RTS is available we can fix this.
     long current = System.currentTimeMillis();
     if (current - lastCommit < 100) {
@@ -130,17 +120,18 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
         throw new AvroBaseException("Solr commit failed");
       }
     }
-    SolrQuery solrQuery = sqh.generateQuery(uniqueKey);    
+
+    SolrQuery solrQuery = sqh.generateQuery(uniqueKey);
     try {
       QueryResponse queryResponse = solrServer.query(solrQuery, SolrRequest.METHOD.POST);
       SolrDocumentList list = queryResponse.getResults();
       sqh.setTotal(list.getNumFound());
       final Iterator<SolrDocument> solrDocumentIterator = list.iterator();
-      return new Iterable<Row<T, K>>() {
+      return new Iterable<K>() {
 
         @Override
-        public Iterator<Row<T, K>> iterator() {
-          return new Iterator<Row<T, K>>() {
+        public Iterator<K> iterator() {
+          return new Iterator<K>() {
 
             @Override
             public boolean hasNext() {
@@ -148,14 +139,15 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
             }
 
             @Override
-            public Row<T, K> next() {
+            public K next() {
               SolrDocument solrDocument = solrDocumentIterator.next();
               Map<String, Object> map = solrDocument.getFieldValueMap();
               Object o = map.get(uniqueKey);
               if (o == null) {
                 throw new AvroBaseException("Unique key not present in document");
               }
-              return get($(o.toString()));
+
+              return keyTx.fromString(o.toString());
             }
 
             @Override
@@ -171,36 +163,13 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
   }
 
   /**
-   * Remove an id from the index.
-   *
-   * @param row
-   * @throws AvroBaseException
-   */
-  protected void unindex(K row) throws AvroBaseException {
-    if (solrServer == null) {
-      return;
-    }
-    try {
-      solrServer.deleteById($_(row));
-      solrServer.commit();
-    } catch (SolrServerException e) {
-      throw new AvroBaseException(e);
-    } catch (IOException e) {
-      throw new AvroBaseException(e);
-    }
-  }
-
-  /**
    * Index a row and value.
    *
    * @param row
    * @param value
    * @return
    */
-  protected boolean index(K row, T value) throws AvroBaseException {
-    if (solrServer == null) {
-      return false;
-    }
+  public void index(K row, T value) throws AvroBaseException {
     Schema schema = value.getSchema();
     SolrInputDocument document = new SolrInputDocument();
     for (String field : fields) {
@@ -225,7 +194,7 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
         }
       }
     }
-    document.addField(uniqueKey, $_(row));
+    document.addField(uniqueKey, keyTx.toString(row));
     try {
       UpdateRequest req = new UpdateRequest();
       long current = System.currentTimeMillis();
@@ -256,20 +225,10 @@ public abstract class SolrAvroBase<T extends SpecificRecord, K> extends AvroBase
       }
       req.add(document);
       solrServer.request(req);
-      return true;
     } catch (SolrServerException e) {
       throw new AvroBaseException(e);
     } catch (IOException e) {
       throw new AvroBaseException(e);
-    }
-  }
-
-  /**
-   * Reindex all rows.  Could be very very expensive.
-   */
-  protected void reindex() {
-    for (Row<T, K> tRow : scan(null, null)) {
-      index(tRow.row, tRow.value);
     }
   }
 }
