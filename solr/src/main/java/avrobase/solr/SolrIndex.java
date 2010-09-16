@@ -164,7 +164,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
   }
 
   @Override
-  public K searchUnique(SQ query) {
+  public K lookup(SQ query) {
     final Iterable<K> results = search(query);
 
     try {

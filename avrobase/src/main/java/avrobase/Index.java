@@ -42,5 +42,5 @@ public interface Index<T extends SpecificRecord, K, Q> {
    * @param query
    * @return The key, or null if there is no matching key.
    */
-  K searchUnique(Q query);
+  K lookup(Q query);
 }
