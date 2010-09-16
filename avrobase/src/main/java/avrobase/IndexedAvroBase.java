@@ -23,35 +23,35 @@ public abstract class IndexedAvroBase<T extends SpecificRecord, K, Q> extends Fo
   @Override
   public K create(T value) throws AvroBaseException {
     final K row = delegate().create(value);
-    index.index(row, value);
+    index.index(new Row<T,K>(value, row));
     return row;
   }
 
   @Override
   public Row<T, K> mutate(K row, Mutator<T> tMutator) throws AvroBaseException {
     final Row<T, K> newRow = delegate().mutate(row, tMutator);
-    index.index(newRow.row, newRow.value);
+    index.index(newRow);
     return newRow;
   }
 
   @Override
   public Row<T, K> mutate(K row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
     final Row<T, K> newRow = delegate().mutate(row, tMutator, tCreator);
-    index.index(newRow.row, newRow.value);
+    index.index(newRow);
     return newRow;
   }
 
   @Override
   public void put(K row, T value) throws AvroBaseException {
     delegate().put(row, value);
-    index.index(row, value);
+    index.index(new Row<T,K>(value, row));
   }
 
   @Override
   public boolean put(K row, T value, long version) throws AvroBaseException {
     final boolean rv = delegate().put(row, value, version);
     if (rv) {
-      index.index(row, value);
+      index.index(new Row<T,K>(value, row));
     }
     return rv;
   }
