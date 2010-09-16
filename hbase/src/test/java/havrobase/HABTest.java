@@ -4,13 +4,14 @@ import avrobase.AvroBase;
 import avrobase.AvroBaseException;
 import avrobase.AvroBaseFactory;
 import avrobase.AvroFormat;
-import avrobase.KeyGenerator;
 import avrobase.Row;
 import bagcheck.GenderType;
 import bagcheck.User;
+import com.google.common.base.Supplier;
 import com.google.inject.Binder;
 import com.google.inject.Module;
 import com.google.inject.Provider;
+import com.google.inject.TypeLiteral;
 import com.google.inject.name.Names;
 import org.apache.avro.Schema;
 import org.apache.avro.io.JsonDecoder;
@@ -65,6 +66,12 @@ public class HABTest {
 
   static class HABModule implements Module {
     public static final HBaseAdmin admin;
+    private static final Provider<Supplier<byte[]>> NULL_SUPPLIER_PROVIDER = new Provider<Supplier<byte[]>>() {
+      @Override
+      public Supplier<byte[]> get() {
+        return null;
+      }
+    };
 
     static {
       try {
@@ -80,15 +87,9 @@ public class HABTest {
       binder.bind(byte[].class).annotatedWith(Names.named("schema")).toInstance(SCHEMA_TABLE);
       binder.bind(byte[].class).annotatedWith(Names.named("table")).toInstance(TABLE);
       binder.bind(byte[].class).annotatedWith(Names.named("family")).toInstance(COLUMN_FAMILY);
-//      binder.bind(String.class).annotatedWith(Names.named("solr")).toInstance("http://localhost:8983/solr/user");
       binder.bind(String.class).annotatedWith(Names.named("solr")).toProvider(NULL_STRING_PROVIDER);
       binder.bind(HAB.CreateType.class).toInstance(HAB.CreateType.SEQUENTIAL);
-      binder.bind(KeyGenerator.class).toProvider(new Provider<KeyGenerator>() {
-        @Override
-        public KeyGenerator get() {
-          return null;
-        }
-      });
+      binder.bind(new TypeLiteral<Supplier<byte[]>>() {}).toProvider(NULL_SUPPLIER_PROVIDER);
       binder.bind(HTablePool.class).toInstance(new HTablePool());
       binder.bind(HBaseAdmin.class).toInstance(admin);
     }

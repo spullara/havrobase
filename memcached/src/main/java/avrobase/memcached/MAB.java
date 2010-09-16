@@ -19,7 +19,7 @@ import org.apache.commons.lang.NotImplementedException;
  * Date: Jun 23, 2010
  * Time: 12:14:36 PM
  */
-public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String, String> {
+public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   private String prekey;
   private String schemaPrekey;
   private MemCachedClient client;

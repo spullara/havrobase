@@ -3,8 +3,8 @@ package havrobase;
 import avrobase.AvroBaseException;
 import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
-import avrobase.KeyGenerator;
 import avrobase.Row;
+import com.google.common.base.Supplier;
 import com.google.inject.Inject;
 import com.google.inject.internal.Nullable;
 import com.google.inject.name.Named;
@@ -64,7 +64,7 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
   private byte[] family;
   private byte[] schemaName;
   private CreateType createType;
-  private KeyGenerator<byte[]> keygen;
+  private Supplier<byte[]> keygen;
   protected static final TimestampGenerator TIMESTAMP_GENERATOR = new TimestampGenerator();
 
   public enum CreateType {
@@ -93,7 +93,7 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
       @Named("schema") byte[] schemaName,
       AvroFormat format,
       CreateType createType,
-      @Nullable KeyGenerator<byte[]> keygen
+      @Nullable Supplier<byte[]> keygen
   ) throws AvroBaseException {
     super(expectedSchema, format);
     this.pool = pool;
@@ -203,7 +203,7 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
         // loop until we don't get an ID collision
         byte[] row;
         do {
-          row = keygen.generate();
+          row = keygen.get();
         } while (!put(row, value, 0));
         return row;
       }

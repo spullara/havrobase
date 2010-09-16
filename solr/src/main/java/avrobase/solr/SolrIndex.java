@@ -1,6 +1,9 @@
 package avrobase.solr;
 
-import avrobase.*;
+import avrobase.AvroBaseException;
+import avrobase.Index;
+import avrobase.ReversableFunction;
+import avrobase.Row;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import org.apache.avro.Schema;
@@ -29,7 +32,12 @@ import javax.xml.parsers.ParserConfigurationException;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * An AvroBase that provides Solr indexing
@@ -41,13 +49,13 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
   private final SolrServer solrServer;
   private final String uniqueKey;
   private final List<String> fields;
-  private final KeyTransformer<K> keyTx;
+  private final ReversableFunction<K, String> keyTx;
 
   private volatile long lastCommit = System.currentTimeMillis();
   private volatile long lastOptimize = System.currentTimeMillis();
   private static Timer commitTimer = new Timer();
 
-  public SolrIndex(String solrURL, KeyTransformer<K> keyTx) {
+  public SolrIndex(String solrURL, ReversableFunction<K, String> keyTx) {
     this.keyTx = keyTx;
     Preconditions.checkNotNull(solrURL);
 
@@ -98,7 +106,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
 
     // TODO: do we really want to throw an exception on index failure??
     try {
-      solrServer.deleteById(keyTx.toString(row));
+      solrServer.deleteById(keyTx.apply(row));
       solrServer.commit();
     } catch (SolrServerException e) {
       throw new AvroBaseException(e);
@@ -148,7 +156,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
                 throw new AvroBaseException("Unique key not present in document");
               }
 
-              return keyTx.fromString(o.toString());
+              return keyTx.unapply(o.toString());
             }
 
             @Override
@@ -205,7 +213,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
         }
       }
     }
-    document.addField(uniqueKey, keyTx.toString(row.row));
+    document.addField(uniqueKey, keyTx.apply(row.row));
     try {
       UpdateRequest req = new UpdateRequest();
       long current = System.currentTimeMillis();
@@ -214,6 +222,8 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
         req.setAction(AbstractUpdateRequest.ACTION.COMMIT, false, false);
       } else {
         final long oldLastCommit = lastCommit;
+        // Here we are basically checking to see in the future whether
+        // a commit has been done since the last time we committed.
         commitTimer.schedule(new TimerTask() {
           @Override
           public void run() {

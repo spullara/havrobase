@@ -2,7 +2,7 @@ package avrobase.solr;
 
 import avrobase.AvroBase;
 import avrobase.IndexedAvroBase;
-import avrobase.KeyTransformer;
+import avrobase.ReversableFunction;
 import org.apache.avro.specific.SpecificRecord;
 
 /**
@@ -13,7 +13,7 @@ import org.apache.avro.specific.SpecificRecord;
  * Time: 11:54:18 AM
  */
 public class SolrAvroBase<T extends SpecificRecord, K> extends IndexedAvroBase<T, K, SQ> {
-  public SolrAvroBase(final AvroBase<T, K> avroBase, String url, KeyTransformer<K> keyTx) {
+  public SolrAvroBase(final AvroBase<T, K> avroBase, String url, ReversableFunction<K, String> keyTx) {
     super(avroBase, new SolrIndex<T, K>(url, keyTx));
   }
 }
