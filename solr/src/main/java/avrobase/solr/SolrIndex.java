@@ -166,16 +166,15 @@ public class SolrIndex<K, T extends SpecificRecord> implements Index<K, T, SQ> {
    * Index a row and value.
    *
    * @param row
-   * @param value
    * @return
    */
-  public void index(K row, T value) throws AvroBaseException {
-    Schema schema = value.getSchema();
+  public void index(Row<T,K> row) throws AvroBaseException {
+    Schema schema = row.value.getSchema();
     SolrInputDocument document = new SolrInputDocument();
     for (String field : fields) {
       Schema.Field f = schema.getField(field);
       if (f != null) {
-        Object o = value.get(f.pos());
+        Object o = row.value.get(f.pos());
         if (o instanceof GenericArray) {
           GenericArray ga = (GenericArray) o;
           for (Object e : ga) {
@@ -194,7 +193,7 @@ public class SolrIndex<K, T extends SpecificRecord> implements Index<K, T, SQ> {
         }
       }
     }
-    document.addField(uniqueKey, keyTx.toString(row));
+    document.addField(uniqueKey, keyTx.toString(row.row));
     try {
       UpdateRequest req = new UpdateRequest();
       long current = System.currentTimeMillis();

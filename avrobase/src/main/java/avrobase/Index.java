@@ -17,11 +17,10 @@ public interface Index<K, T extends SpecificRecord, Q> {
   /**
    * Indexes the given row. Any existing index data is removed/replaced.
    * @param row
-   * @param value
    * @return
    * @throws AvroBaseException
    */
-  void index(K row, T value) throws AvroBaseException;
+  void index(Row<T,K> row) throws AvroBaseException;
 
   /**
    * unindexes the given row.
