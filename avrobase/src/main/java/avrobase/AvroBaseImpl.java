@@ -1,5 +1,6 @@
 package avrobase;
 
+import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;
@@ -173,7 +174,9 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
       sdr.setExpected(schema);
       return sdr.read(null, d);
     } catch (IOException e) {
-      throw new AvroBaseException("Failed to read value", e);
+      throw new AvroBaseException("Failed to read value: " + schema, e);
+    } catch (AvroTypeException e) {
+      throw new AvroBaseException("Failed to read value: " + schema, e);
     }
   }
 }
