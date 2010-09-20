@@ -40,9 +40,6 @@ public abstract class IndexedAvroBase<T extends SpecificRecord, K, Q> extends Fo
   @Override
   public Row<T, K> mutate(K row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
     final Row<T, K> newRow = delegate().mutate(row, tMutator, tCreator);
-    if (newRow == null) {
-      return null;
-    }
     index.index(newRow);
     return newRow;
   }
