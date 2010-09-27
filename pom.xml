@@ -11,7 +11,7 @@
     <module>hbase</module>
     <module>memcached</module>
     <module>mysql</module>
-    <!-- <module>redis</module> -->
+    <module>redis</module>
   </modules>
   <packaging>pom</packaging>
 
@@ -43,6 +43,14 @@
       <url>scp://www.javarants.com/opt/sites/javarants/snapshots/</url>
     </snapshotRepository>
   </distributionManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.google.code.findbugs</groupId>
+      <artifactId>jsr305</artifactId>
+      <version>1.3.9</version>
+    </dependency>
+  </dependencies>
 
   <dependencyManagement>
     <dependencies>
