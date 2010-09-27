@@ -11,7 +11,7 @@ import org.apache.avro.specific.SpecificRecord;
  *
  * @author john
  */
-public abstract class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingAvroBase<T, K>  {
+public class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingAvroBase<T, K>  {
   private final Index<T,K,Q> index;
 
   @Inject

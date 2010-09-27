@@ -8,7 +8,6 @@ import org.apache.avro.specific.SpecificRecord;
  *
  * @param <T>
  * @param <K>
- * @param <Q>
  */
 public abstract class ForwardingAvroBase<T extends SpecificRecord, K> extends ForwardingObject implements AvroBase<T, K> {
   private final AvroBase<T, K> delegate;

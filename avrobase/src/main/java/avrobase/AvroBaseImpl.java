@@ -103,6 +103,9 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
   /**
    * Serialize the Avro instance using its schema and the
    * format set for this avrobase
+   * @param value value to serialize
+   * @return bytes
+   * @throws AvroBaseException if we couldn't serialize
    */
   protected byte[] serialize(T value) throws AvroBaseException {
     try {
