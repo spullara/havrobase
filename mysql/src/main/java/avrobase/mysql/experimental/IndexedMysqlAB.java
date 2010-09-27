@@ -4,6 +4,7 @@ import avrobase.AvroBaseException;
 import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Iterables;
@@ -39,6 +40,8 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * @param <T>
  */
 public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Long> {
+  private static final Joiner COMMA = Joiner.on(',');
+  private static final Joiner SPACE = Joiner.on(' ');
   private static final AvroFormat AVRO_FORMAT = AvroFormat.BINARY;
   private static final String[] BASE_COLS = new String[]{"id", "version", "schema_id", "avro"};
 
@@ -66,24 +69,25 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
 
   public IndexedMysqlAB(DataSource datasource, String table, Schema schema, String schemaTable, Supplier<Long> idSupplier, Iterable<IndexColumn<T, ?>> indexColumns, @Nullable ManyManyRelation<T> relation, boolean createTable) {
     super(schema, AVRO_FORMAT);
-    this.keySupplier = idSupplier;
-    this.createTable = createTable;
-
     this.datasource = checkNotNull(datasource);
     this.table = checkNotNull(table);
     this.schemaTable = checkNotNull(schemaTable);
     this.indexColumns = checkNotNull(indexColumns);
     this.relation = relation;
+    this.keySupplier = checkNotNull(idSupplier);
+    this.createTable = createTable;
 
-    createTables();
-
-    final String insertColsClause = columnClause(createInsertCols(relation, indexColumns));
+    final String insertColsClause = COMMA.join(orderedColNames(relation, indexColumns));
     final String insertParamClause = paramClause(BASE_COLS.length + Iterables.size(indexColumns) + (relation != null ? 2 : 0));
-    insertStatement = "INSERT INTO " + table + " " + insertColsClause + " VALUES " + insertParamClause;
+    insertStatement = "INSERT INTO " + table + " (" + insertColsClause + ") VALUES " + insertParamClause;
     upsertStatement = "INSERT INTO " + table + insertColsClause + " VALUES " + insertParamClause + " ON DUPLICATE KEY UPDATE schema_id=values(schema_id), version = version + 1, avro=values(avro)";
     updateStatement = "UPDATE " + table + " SET schema_id=?, version=version+1, avro=? WHERE id=? AND version=?";
     selectStatement = "SELECT schema_id, version, avro FROM " + table + " WHERE id=?";
     selectIndexBaseStatement = "SELECT id, schema_id, version, avro FROM " + table + " WHERE";
+
+    if (createTable) {
+      createTables();
+    }
   }
 
   public String generateDdl() {
@@ -115,7 +119,7 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
       clauses.add((ic.isUnique() ? "UNIQUE " : "") + "INDEX (" + ic.getColumnName() + ")");
     }
 
-    return "CREATE TABLE " + table + " " + columnClause(clauses) + " ENGINE=InnoDB DEFAULT CHARSET=UTF8";
+    return SPACE.join("CREATE TABLE", table, '(', COMMA.join(clauses), ')', "ENGINE=InnoDB DEFAULT CHARSET=UTF8");
   }
 
   public void createTables() {
@@ -275,7 +279,10 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
     return schemaId;
   }
 
-  private List<String> createInsertCols(ManyManyRelation relation, Iterable<IndexColumn<T, ?>> idxColumns) {
+  /**
+   * return list of column names in the sanctioned order.
+   */
+  private List<String> orderedColNames(ManyManyRelation relation, Iterable<IndexColumn<T, ?>> idxColumns) {
     // Order: base cols, relation cols, other index cols
     List<String> cols = new ArrayList<String>();
     for (String col : BASE_COLS) {
@@ -544,18 +551,6 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
         throw new AvroBaseException("Database problem", e);
       }
     }
-  }
-
-  private static String columnClause(Iterable<String> strings) {
-    StringBuilder sb = new StringBuilder();
-    sb.append('(');
-    for (String str : strings) {
-      sb.append(str);
-      sb.append(',');
-    }
-    sb.deleteCharAt(sb.length() - 1);
-    sb.append(')');
-    return sb.toString();
   }
 
   public static String paramClause(int count) {
