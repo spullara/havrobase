@@ -11,7 +11,7 @@ import org.apache.avro.specific.SpecificRecord;
  *
  * @author john
  */
-public class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingAvroBase<T, K>  {
+public class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingAvroBase<T, K> implements Searchable<T,K,Q> {
   private final Index<T,K,Q> index;
 
   @Inject
@@ -65,12 +65,6 @@ public class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingA
     index.unindex(row);
   }
 
-  /**
-   * Performs the query directly. Does not delegate.
-   * @param query
-   * @return
-   * @throws AvroBaseException
-   */
   public Iterable<Row<T, K>> search(Q query) throws AvroBaseException {
     return Iterables.transform(index.search(query), new Function<K, Row<T,K>>() {
       @Override
@@ -79,5 +73,10 @@ public class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingA
         return delegate().get(from);
       }
     });
+  }
+
+  @Override
+  public Row<T, K> lookup(Q query) throws AvroBaseException {
+    return Iterables.getFirst(search(query), null);
   }
 }

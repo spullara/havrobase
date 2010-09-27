@@ -1,11 +1,9 @@
 package avrobase.mysql.experimental;
 
-import avrobase.AvroBaseException;
-import avrobase.AvroBaseImpl;
-import avrobase.AvroFormat;
-import avrobase.Row;
+import avrobase.*;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Iterables;
 import org.apache.avro.Schema;
@@ -39,9 +37,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
  *
  * @param <T>
  */
-public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Long> {
-  private static final Joiner COMMA = Joiner.on(',');
-  private static final Joiner SPACE = Joiner.on(' ');
+public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Long> implements Searchable<T,Long, IndexQuery<?>> {
+  private static final Joiner COMMAS = Joiner.on(',').skipNulls();
+  private static final Joiner SPACES = Joiner.on(' ').skipNulls();
   private static final AvroFormat AVRO_FORMAT = AvroFormat.BINARY;
   private static final String[] BASE_COLS = new String[]{"id", "version", "schema_id", "avro"};
 
@@ -67,17 +65,17 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
   private final String selectStatement;
   private final String selectIndexBaseStatement;
 
-  public IndexedMysqlAB(DataSource datasource, String table, Schema schema, String schemaTable, Supplier<Long> idSupplier, Iterable<IndexColumn<T, ?>> indexColumns, @Nullable ManyManyRelation<T> relation, boolean createTable) {
+  public IndexedMysqlAB(DataSource datasource, String table, Schema schema, String schemaTable, Supplier<Long> keySupplier, Iterable<IndexColumn<T, ?>> indexColumns, @Nullable ManyManyRelation<T> relation, boolean createTable) {
     super(schema, AVRO_FORMAT);
     this.datasource = checkNotNull(datasource);
     this.table = checkNotNull(table);
     this.schemaTable = checkNotNull(schemaTable);
     this.indexColumns = checkNotNull(indexColumns);
     this.relation = relation;
-    this.keySupplier = checkNotNull(idSupplier);
+    this.keySupplier = checkNotNull(keySupplier);
     this.createTable = createTable;
 
-    final String insertColsClause = COMMA.join(orderedColNames(relation, indexColumns));
+    final String insertColsClause = COMMAS.join(orderedColNames(relation, indexColumns));
     final String insertParamClause = paramClause(BASE_COLS.length + Iterables.size(indexColumns) + (relation != null ? 2 : 0));
     insertStatement = "INSERT INTO " + table + " (" + insertColsClause + ") VALUES " + insertParamClause;
     upsertStatement = "INSERT INTO " + table + insertColsClause + " VALUES " + insertParamClause + " ON DUPLICATE KEY UPDATE schema_id=values(schema_id), version = version + 1, avro=values(avro)";
@@ -85,9 +83,7 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
     selectStatement = "SELECT schema_id, version, avro FROM " + table + " WHERE id=?";
     selectIndexBaseStatement = "SELECT id, schema_id, version, avro FROM " + table + " WHERE";
 
-    if (createTable) {
-      createTables();
-    }
+    createTables();
   }
 
   public String generateDdl() {
@@ -98,12 +94,12 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
     clauses.add("version integer not null");
 
     if (relation != null) {
-      clauses.add(relation.getLeft().getColumnName() + " bigint not null");
-      clauses.add(relation.getRight().getColumnName() + " bigint not null");
+      clauses.add(SPACES.join(relation.getLeft().getColumnName(), "bigint not null"));
+      clauses.add(SPACES.join(relation.getRight().getColumnName(), "bigint not null"));
     }
 
     for (IndexColumn<T, ?> ic : indexColumns) {
-      clauses.add(ic.getColumnName() + " " + ic.getColumnTypeString() + (ic.isNullable() ? " not null" : ""));
+      clauses.add(SPACES.join(ic.getColumnName(), ' ', ic.getColumnTypeString(), (ic.isNullable() ? "not null" : null)));
     }
 
     // data cols
@@ -111,16 +107,17 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
     clauses.add("avro mediumblob not null");
 
     if (relation != null) {
-      clauses.add("UNIQUE INDEX (" + relation.getLeft().getColumnName() + "," + relation.getRight() + ")");
-      clauses.add("INDEX (" + relation.getRight().getColumnName() + ")");
+      clauses.add(SPACES.join("UNIQUE INDEX (", COMMAS.join(relation.getLeft().getColumnName(), relation.getRight().getColumnName()), ')'));
+      clauses.add(SPACES.join("INDEX (", relation.getRight().getColumnName(), ')'));
     }
 
     for (IndexColumn<T, ?> ic : indexColumns) {
-      clauses.add((ic.isUnique() ? "UNIQUE " : "") + "INDEX (" + ic.getColumnName() + ")");
+      clauses.add(SPACES.join((ic.isUnique() ? "UNIQUE" : null), "INDEX (", ic.getColumnName(), ')'));
     }
 
-    return SPACE.join("CREATE TABLE", table, '(', COMMA.join(clauses), ')', "ENGINE=InnoDB DEFAULT CHARSET=UTF8");
+    return SPACES.join("CREATE TABLE", table, '(', COMMAS.join(clauses), ')', "ENGINE=InnoDB DEFAULT CHARSET=UTF8");
   }
+
 
   public void createTables() {
     try {
@@ -138,6 +135,7 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
               statement.executeUpdate(createString);
               close(statement);
             } else {
+              System.out.println("You need this DDL:\n"+ generateDdl());
               throw new AvroBaseException("table does not exist: " + table);
             }
           }
@@ -146,11 +144,13 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
         {
           ResultSet tables = data.getTables(null, null, this.schemaTable, null);
           if (!tables.next()) {
+            final String ddl = "CREATE TABLE " + this.schemaTable + " (id integer primary key auto_increment, json longblob not null)";
             if (createTable) {
               Statement statement = connection.createStatement();
-              statement.executeUpdate("CREATE TABLE " + this.schemaTable + " (id integer primary key auto_increment, json longblob not null)");
+              statement.executeUpdate(ddl);
               statement.close();
             } else {
+              System.out.println("You need this DDL:\n"+ ddl);
               throw new AvroBaseException("schema table does not exist: " + schemaTable);
             }
           } else {
@@ -181,9 +181,8 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
     return indexSelect(column.getColumnName(), column.getColumnSqlType(), value);
   }
 
-  public Row<T,Long> lookup(IndexColumn column, final Object value) {
-    // TODO: need better implementation -- this is quick and dirty
-    return Iterables.getOnlyElement(indexSelect(column.getColumnName(), column.getColumnSqlType(), value), null);
+  public Row<T,Long> lookup(IndexQuery<?> selector) {
+    return Iterables.getOnlyElement(indexSelect(selector.getColumn().getColumnName(), selector.getColumn().getColumnSqlType(), selector.getValue()), null);
   }
 
   protected Iterable<Row<T,Long>> indexSelect(String column, final int sqlType, final Object value) {
@@ -369,6 +368,11 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
   @Override
   public Iterable<Row<T, Long>> scan(Long startRow, Long stopRow) throws AvroBaseException {
     throw new NotImplementedException();
+  }
+
+  @Override
+  public Iterable<Row<T, Long>> search(IndexQuery query) throws AvroBaseException {
+    return select(query.getColumn(), query.getColumn());
   }
 
   private abstract class Query<R> {
@@ -558,10 +562,9 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
 
     final StringBuilder sb = new StringBuilder();
     sb.append("(");
-    for (int i = 0; i < count - 1; i++) {
-      sb.append("?,");
-    }
-    sb.append("?)");
+    sb.append(Strings.repeat("?,", count));
+    sb.deleteCharAt(sb.length() - 1);
+    sb.append(")");
     return sb.toString();
   }
 
