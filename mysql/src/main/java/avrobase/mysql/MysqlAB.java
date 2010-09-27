@@ -5,7 +5,6 @@ import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.commons.codec.binary.Hex;
-import org.apache.commons.lang.NotImplementedException;
 
 import javax.sql.DataSource;
 import java.io.ByteArrayInputStream;
@@ -182,8 +181,8 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
   @Override
   public void delete(K row) throws AvroBaseException {
-    throw new NotImplementedException();
-    /// TODO delete(keytx.toBytes(row));
+    final byte[] key = keytx.toBytes(row);
+    // TODO
   }
 
   @Override
