@@ -28,19 +28,40 @@ public class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingA
   }
 
   @Override
-  public Row<T, K> mutate(K row, Mutator<T> tMutator) throws AvroBaseException {
-    final Row<T, K> newRow = delegate().mutate(row, tMutator);
-    if (newRow == null) {
-      return null;
+  public Row<T, K> mutate(K row, final Mutator<T> tMutator) throws AvroBaseException {
+    final boolean[] success = {false};
+    final Row<T, K> newRow = delegate().mutate(row, new Mutator<T>() {
+      @Override
+      public T mutate(T value) {
+        T mutate = tMutator.mutate(value);
+        if (mutate != null) {
+          success[0] = true;
+        }
+        return mutate;
+      }
+    });
+    if (success[0]) {
+      index.index(newRow);
     }
-    index.index(newRow);
     return newRow;
   }
 
   @Override
-  public Row<T, K> mutate(K row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
-    final Row<T, K> newRow = delegate().mutate(row, tMutator, tCreator);
-    index.index(newRow);
+  public Row<T, K> mutate(K row, final Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
+    final boolean[] success = {false};
+    final Row<T, K> newRow = delegate().mutate(row, new Mutator<T>() {
+      @Override
+      public T mutate(T value) {
+        T mutate = tMutator.mutate(value);
+        if (mutate != null) {
+          success[0] = true;
+        }
+        return mutate;
+      }
+    }, tCreator);
+    if (success[0]) {
+      index.index(newRow);
+    }
     return newRow;
   }
 
