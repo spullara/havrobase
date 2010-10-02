@@ -50,13 +50,13 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
   private final byte   VERSION_COLUMN_BYTE = 118;
   private final byte[] SCHEMA_COLUMN = $("s");
   private final byte   SCHEMA_COLUMN_BYTE = 115;
-  private final byte[] SEQUENCE_COLUMN = $("i");
-  private final byte   SEQUENCE_COLUMN_BYTE = 105;
   private final byte[] DATA_COLUMN = $("d");
   private final byte   DATA_COLUMN_BYTE = 100;
   private final byte[] FORMAT_COLUMN = $("f");
   private final byte   FORMAT_COLUMN_BYTE = 102;
+
   private final byte[] SEQUENCE_ROW = new byte[0];
+  private final byte[] SEQUENCE_COLUMN = $("i");
 
   // Schema Table constants
   private final byte[] AVRO_FAMILY = $("avro");
@@ -397,7 +397,6 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
       long version = -1;
       Schema schema = null;
       AvroFormat format = AvroFormat.BINARY;
-      byte[] schemaBytes = null;
 
       KeyValue[] raw = result.raw();
       for (KeyValue kv : raw) {
