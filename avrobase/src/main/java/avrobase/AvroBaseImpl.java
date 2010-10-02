@@ -160,17 +160,27 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
    * in the hbase row
    */
   protected T
-  readValue(byte[] latest, Schema schema, AvroFormat format) throws AvroBaseException {
+  readValue(byte[] data, Schema schema, AvroFormat format) throws AvroBaseException {
+    return readValue(data, schema, format, 0, data.length);
+  }
+
+  /**
+   * Read the avro serialized data using the specified schema and format
+   * in the hbase row
+   */
+  protected T
+  readValue(byte[] data, Schema schema, AvroFormat format, int offset, int length) throws AvroBaseException {
     try {
       Decoder d;
+      ByteArrayInputStream in = new ByteArrayInputStream(data, offset, length);
       switch (format) {
         case JSON:
-          d = new JsonDecoder(schema, new ByteArrayInputStream(latest));
+          d = new JsonDecoder(schema, in);
           break;
         case BINARY:
         default:
           DecoderFactory factory = new DecoderFactory();
-          d = factory.createBinaryDecoder(new ByteArrayInputStream(latest), null);
+          d = factory.createBinaryDecoder(in, null);
           break;
       }
       SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(actualSchema);

@@ -13,6 +13,7 @@ import org.apache.avro.specific.SpecificRecord;
 import org.apache.commons.lang.NotImplementedException;
 import org.apache.hadoop.hbase.HColumnDescriptor;
 import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.KeyValue;
 import org.apache.hadoop.hbase.TableNotFoundException;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
@@ -29,8 +30,6 @@ import org.apache.hadoop.hbase.util.Bytes;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.Iterator;
-import java.util.Map;
-import java.util.NavigableMap;
 import java.util.NoSuchElementException;
 import java.util.Random;
 
@@ -48,10 +47,15 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
 
   // Avro Table Constants
   private final byte[] VERSION_COLUMN = $("v");
+  private final byte   VERSION_COLUMN_BYTE = 118;
   private final byte[] SCHEMA_COLUMN = $("s");
+  private final byte   SCHEMA_COLUMN_BYTE = 115;
   private final byte[] SEQUENCE_COLUMN = $("i");
+  private final byte   SEQUENCE_COLUMN_BYTE = 105;
   private final byte[] DATA_COLUMN = $("d");
+  private final byte   DATA_COLUMN_BYTE = 100;
   private final byte[] FORMAT_COLUMN = $("f");
+  private final byte   FORMAT_COLUMN_BYTE = 102;
   private final byte[] SEQUENCE_ROW = new byte[0];
 
   // Schema Table constants
@@ -384,39 +388,43 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
 
   private Row<T, byte[]> getRowResult(Result result, byte[] row) throws AvroBaseException {
     // Defaults
-    byte[] latest = null;
-    long timestamp = Long.MAX_VALUE;
-    long version = -1;
-
     try {
-      // Run through and find the latest value to get the bytes and the timestamp
-      NavigableMap<byte[], NavigableMap<byte[], NavigableMap<Long, byte[]>>> map = result.getMap();
-      if (map != null) {
-        NavigableMap<byte[], NavigableMap<Long, byte[]>> familyData = map.get(family);
-        NavigableMap<Long, byte[]> values = familyData.get(DATA_COLUMN);
-        if (values != null) {
-          for (Map.Entry<Long, byte[]> e : values.entrySet()) {
-            if (e.getKey() < timestamp) {
-              timestamp = e.getKey();
-              latest = e.getValue();
-            }
-          }
-        }
 
-        // Grab the version
-        byte[] versionB = result.getValue(family, VERSION_COLUMN);
-        version = versionB == null ? -1 : Bytes.toLong(versionB);
-      }
-      // If the latest is null, just give up and return null
-      if (latest != null) {
-        // If not, load it up and return wrapped Row
-        Schema schema = loadSchema(result);
-        byte[] formatB = result.getValue(family, FORMAT_COLUMN);
-        AvroFormat format = AvroFormat.BINARY;
-        if (formatB != null) {
-          format = AvroFormat.values()[Bytes.toInt(formatB)];
+      byte[] dataBytes = null;
+      int dataOffset = -1;
+      int dataLength = 0;
+
+      long version = -1;
+      Schema schema = null;
+      AvroFormat format = AvroFormat.BINARY;
+      byte[] schemaBytes = null;
+
+      KeyValue[] raw = result.raw();
+      for (KeyValue kv : raw) {
+        byte[] buffer = kv.getBuffer();
+        int offset = kv.getValueOffset();
+        int length = kv.getValueLength();
+        switch(buffer[kv.getQualifierOffset()]) {
+          case DATA_COLUMN_BYTE:
+            dataBytes = buffer;
+            dataOffset = offset;
+            dataLength = length;
+            break;
+          case VERSION_COLUMN_BYTE:
+            version = Bytes.toLong(buffer, offset, length);
+            break;
+          case FORMAT_COLUMN_BYTE:
+            format = AvroFormat.values()[Bytes.toInt(buffer, offset, length)];
+            break;
+          case SCHEMA_COLUMN_BYTE:
+            schema = loadSchema(row, buffer, offset, length);
+            break;
         }
-        return new Row<T, byte[]>(readValue(latest, schema, format), row, version);
+      }
+
+      if (dataBytes != null) {
+        // If not, load it up and return wrapped Row
+        return new Row<T, byte[]>(readValue(dataBytes, schema, format, dataOffset, dataLength), row, version);
       }
       return null;
     } catch (IOException e) {
@@ -479,13 +487,11 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
 
   // Load a schema from the current hbase row
 
-  private Schema loadSchema(Result result) throws AvroBaseException, IOException {
-    byte[] row = result.getRow();
-    byte[] schemaKey = result.getValue(family, SCHEMA_COLUMN);
+  private Schema loadSchema(final byte[] row, final byte[] schemaKey, int offset, int length) throws AvroBaseException, IOException {
     if (schemaKey == null) {
       throw new AvroBaseException("Schema not set for row: " + $_(row));
     }
-    Schema schema = schemaCache.get($_(schemaKey));
+    Schema schema = schemaCache.get($_(schemaKey, offset, length));
     if (schema == null) {
       HTableInterface schemaTable = pool.getTable(schemaName);
       try {
@@ -501,6 +507,10 @@ public class HAB<T extends SpecificRecord> extends AvroBaseImpl<T, byte[]> {
       }
     }
     return schema;
+  }
+
+  private String $_(byte[] schemaKey, int offset, int length) {
+    return Bytes.toString(schemaKey, offset, length);
   }
 
   // Get or create the specified table with columnfamily
