@@ -152,7 +152,7 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
           return false;
         }
         String v = j.get(row + RAB.v);
-        if ((v == null && version != 0) || (v != null && version == 0) || !v.equals(String.valueOf(version))) {
+        if ((v == null && version != 0) || (v != null && version == 0) || (v != null && !v.equals(String.valueOf(version)))) {
           return false;
         }
         final String finalSchemaKey = schemaKey;

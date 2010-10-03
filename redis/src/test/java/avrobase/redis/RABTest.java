@@ -4,6 +4,7 @@ import avrobase.Row;
 import bagcheck.User;
 import com.google.common.base.Supplier;
 import org.apache.avro.util.Utf8;
+import org.junit.Assert;
 import org.junit.Test;
 import redis.clients.jedis.JedisPool;
 
@@ -53,6 +54,17 @@ public class RABTest {
 
     assertTrue(userRAB.put("test", user, test.version));
     assertFalse(userRAB.put("test", user, test.version));
+  }
+
+  @Test
+  public void create() {
+    RAB<User> userRAB = getRAB();
+    User user = getUser();
+    String s = userRAB.create(user);
+    Row<User,String> test = userRAB.get(s);
+    assertEquals(user, test.value);
+    userRAB.delete(s);
+    assertEquals(null, userRAB.get(s));
   }
 
   private RAB<User> getRAB() {
