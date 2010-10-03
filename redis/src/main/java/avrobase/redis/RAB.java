@@ -7,9 +7,12 @@ import avrobase.Row;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisException;
 import redis.clients.jedis.JedisPool;
+import redis.clients.jedis.TransactionBlock;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
+import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -36,17 +39,31 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   }
 
   @Override
-  public Row<T, String> get(String row) throws AvroBaseException {
+  public Row<T, String> get(final String row) throws AvroBaseException {
     try {
       boolean returned = false;
-      Jedis j = pool.getResource();
+      final Jedis j = pool.getResource();
       try {
         j.select(db);
-        String schemaId = j.get(row + s);
-        String schemaStr = j.get(schemaId + z);
-        Schema schema = Schema.parse(schemaStr);
-        long version = Long.parseLong(j.get(row + v));
-        return new Row<T, String>(readValue(j.get(row + d).getBytes(), schema, format), row, version);
+        List<Object> results;
+        do {
+          results = j.multi(new TransactionBlock() {
+            @Override
+            public void execute() throws JedisException {
+              get(row + s);
+              get(row + v);
+              get(row + d);
+            }
+          });
+        } while (results == null);
+        if (results.size() != 3) {
+          throw new AvroBaseException("Incorrect number of results from redis transaction: " + results);
+        }
+        String schemaId = (String) results.get(0);
+        String versionStr = (String) results.get(1);
+        String data = (String) results.get(2);
+        Schema schema = Schema.parse(j.get(schemaId + z));
+        return new Row<T, String>(readValue(data.getBytes(), schema, format), row, Long.parseLong(versionStr));
       } catch (Exception e) {
         pool.returnBrokenResource(j);
         returned = true;
@@ -65,21 +82,27 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   }
 
   @Override
-  public void put(String row, T value) throws AvroBaseException {
+  public void put(final String row, final T value) throws AvroBaseException {
     try {
       boolean returned = false;
       Jedis j = pool.getResource();
       try {
         j.select(db);
-        String versionStr = j.get(row + v);
-        long version = versionStr == null ? 0 : Long.parseLong(versionStr) + 1;
         Schema schema = value.getSchema();
-        String doc = schema.toString();
-        String schemaKey = createSchemaKey(schema, doc);
+        final String doc = schema.toString();
+        final String schemaKey = createSchemaKey(schema, doc);
         j.set(row + s, schemaKey);
-        j.set(schemaKey + z, doc);
-        j.set(row + v, String.valueOf(version));
-        j.set(row + d, new String(serialize(value), UTF8));
+        List<Object> results;
+        do {
+          results = j.multi(new TransactionBlock() {
+            @Override
+            public void execute() throws JedisException {
+              incr(row + v);
+              set(schemaKey + z, doc);
+              set(row + d, new String(serialize(value), UTF8));
+            }
+          });
+        } while (results == null);
       } catch (Exception e) {
         pool.returnBrokenResource(j);
         returned = true;
