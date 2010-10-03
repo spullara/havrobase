@@ -10,7 +10,6 @@ import org.apache.avro.specific.SpecificRecord;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisException;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Transaction;
 import redis.clients.jedis.TransactionBlock;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
@@ -35,7 +34,7 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   private static final String v = "_v";
   private static final String z = "_z";
 
-  public RAB(JedisPool pool, int db,  Supplier<String> kg, Schema actualSchema) {
+  public RAB(JedisPool pool, int db, Supplier<String> kg, Schema actualSchema) {
     super(actualSchema, AvroFormat.JSON);
     this.pool = pool;
     this.db = db;
@@ -64,7 +63,7 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
         String schemaId = (String) results.get(0);
         String versionStr = (String) results.get(1);
         String data = (String) results.get(2);
-        if (data == null) {
+        if (versionStr == null || schemaId == null || data == null) {
           return null;
         }
         Schema schema = schemaCache.get(schemaId);
@@ -187,7 +186,7 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
           results = j.multi(new TransactionBlock() {
             @Override
             public void execute() throws JedisException {
-              del(row + v);
+              del(row + v); // Delete the version first and it is deleted
               del(row + d);
               del(row + s);
             }
