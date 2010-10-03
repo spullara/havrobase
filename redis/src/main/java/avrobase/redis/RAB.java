@@ -147,7 +147,7 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
         if (!watch.equals("OK")) {
           return false;
         }
-        String versionStr = j.get(row + RAB.v);
+        String versionStr = j.get(row + v);
         if ((versionStr == null && version != 0) || // row missing but version set
             (versionStr != null && version == 0) || // row exists but insert requested
             (versionStr != null && !versionStr.equals(String.valueOf(version))) // version in db doesn't match
