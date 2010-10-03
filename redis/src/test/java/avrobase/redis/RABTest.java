@@ -2,11 +2,14 @@ package avrobase.redis;
 
 import avrobase.Row;
 import bagcheck.User;
+import com.google.common.base.Supplier;
 import org.apache.avro.util.Utf8;
 import org.junit.Test;
 import redis.clients.jedis.JedisPool;
 
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.Random;
 
 import static junit.framework.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -55,7 +58,14 @@ public class RABTest {
   private RAB<User> getRAB() {
     JedisPool pool = getPool();
 
-    return new RAB<User>(pool, 0, User.SCHEMA$);
+    return new RAB<User>(pool, 0, new Supplier<String>() {
+      Random random = new SecureRandom();
+
+      @Override
+      public String get() {
+        return String.valueOf(random.nextLong());
+      }
+    }, User.SCHEMA$);
   }
 
   private JedisPool getPool() {

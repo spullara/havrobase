@@ -88,8 +88,10 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
 
   @Override
   public String create(T value) throws AvroBaseException {
-    String row = kg.get();
-    put(row, value);
+    String row;
+    do {
+      row = kg.get();
+    } while(!put(row, value, 0));
     return row;
   }
 
@@ -150,7 +152,7 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
           return false;
         }
         String v = j.get(row + RAB.v);
-        if (!v.equals(String.valueOf(version))) {
+        if ((v == null && version != 0) || (v != null && version == 0) || !v.equals(String.valueOf(version))) {
           return false;
         }
         final String finalSchemaKey = schemaKey;
