@@ -4,6 +4,7 @@ import avrobase.AvroBaseException;
 import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
+import com.google.common.base.Supplier;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import redis.clients.jedis.Jedis;
@@ -27,16 +28,18 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
 
   private JedisPool pool;
   private int db;
+  private Supplier<String> kg;
 
   private static final String d = "_d";
   private static final String s = "_s";
   private static final String v = "_v";
   private static final String z = "_z";
 
-  public RAB(JedisPool pool, int db, Schema actualSchema) {
+  public RAB(JedisPool pool, int db,  Supplier<String> kg, Schema actualSchema) {
     super(actualSchema, AvroFormat.JSON);
     this.pool = pool;
     this.db = db;
+    this.kg = kg;
   }
 
   @Override
@@ -85,7 +88,9 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
 
   @Override
   public String create(T value) throws AvroBaseException {
-    throw new NotImplementedException();
+    String row = kg.get();
+    put(row, value);
+    return row;
   }
 
   @Override
