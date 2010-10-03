@@ -62,7 +62,10 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
         String schemaId = (String) results.get(0);
         String versionStr = (String) results.get(1);
         String data = (String) results.get(2);
-        Schema schema = Schema.parse(j.get(schemaId + z));
+        Schema schema = schemaCache.get(schemaId);
+        if (schema == null) {
+          schema = loadSchema(j.get(schemaId + z).getBytes(), schemaId);
+        }
         return new Row<T, String>(readValue(data.getBytes(), schema, format), row, Long.parseLong(versionStr));
       } catch (Exception e) {
         pool.returnBrokenResource(j);
@@ -89,16 +92,20 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
       try {
         j.select(db);
         Schema schema = value.getSchema();
-        final String doc = schema.toString();
-        final String schemaKey = createSchemaKey(schema, doc);
-        j.set(row + s, schemaKey);
+        String schemaKey = hashCache.get(schema);
+        if (schemaKey == null) {
+          final String doc = schema.toString();
+          schemaKey = createSchemaKey(schema, doc);
+          j.set(schemaKey + z, doc);
+        }
+        final String finalSchemaKey = schemaKey;
         List<Object> results;
         do {
           results = j.multi(new TransactionBlock() {
             @Override
             public void execute() throws JedisException {
               incr(row + v);
-              set(schemaKey + z, doc);
+              set(row + s, finalSchemaKey);
               set(row + d, new String(serialize(value), UTF8));
             }
           });
