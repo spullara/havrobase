@@ -114,8 +114,7 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
             @Override
             public void execute() throws JedisException {
               incr(row + v);
-              set(row + s, finalSchemaKey);
-              set(row + d, new String(serialize(value), UTF8));
+              mset(row + s, finalSchemaKey, row + d, new String(serialize(value), UTF8));
             }
           });
         } while (results == null);
