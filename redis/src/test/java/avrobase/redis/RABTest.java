@@ -21,12 +21,23 @@ import static org.junit.Assert.assertTrue;
  */
 public class RABTest {
   @Test
-  public void setGet() {
+  public void putGet() {
     RAB<User> userRAB = getRAB();
     User user = getUser();
     userRAB.put("test", user);
     Row<User,String> test = userRAB.get("test");
     assertEquals(user, test.value);
+  }
+
+  @Test
+  public void delete() {
+    RAB<User> userRAB = getRAB();
+    User user = getUser();
+    userRAB.put("test", user);
+    Row<User,String> test = userRAB.get("test");
+    assertEquals(user, test.value);
+    userRAB.delete("test");
+    assertEquals(null, userRAB.get("test"));
   }
 
   @Test
