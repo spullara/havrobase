@@ -54,13 +54,11 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
           results = j.multi(new TransactionBlock() {
             @Override
             public void execute() throws JedisException {
-              get(row + s);
-              get(row + v);
-              get(row + d);
+              mget(row + s, row + v, row + d);
             }
           });
         } while (results == null);
-        if (results.size() != 3) {
+        if (results.size() != 1 || (results = (List<Object>) results.get(0)).size() != 3) {
           throw new AvroBaseException("Incorrect number of results from redis transaction: " + results);
         }
         String schemaId = (String) results.get(0);
@@ -151,17 +149,18 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
         if (!watch.equals("OK")) {
           return false;
         }
-        String v = j.get(row + RAB.v);
-        if ((v == null && version != 0) || (v != null && version == 0) || (v != null && !v.equals(String.valueOf(version)))) {
+        String versionStr = j.get(row + RAB.v);
+        if ((versionStr == null && version != 0) || // row missing but version set
+            (versionStr != null && version == 0) || // row exists but insert requested
+            (versionStr != null && !versionStr.equals(String.valueOf(version))) // version in db doesn't match
+            ) {
           return false;
         }
         final String finalSchemaKey = schemaKey;
         List<Object> results = j.multi(new TransactionBlock() {
           @Override
           public void execute() throws JedisException {
-            incr(row + RAB.v);
-            set(row + s, finalSchemaKey);
-            set(row + d, new String(serialize(value), UTF8));
+            mset(row + v, String.valueOf(version + 1), row + s, finalSchemaKey, row + d, new String(serialize(value), UTF8));
           }
         });
         return results != null;
