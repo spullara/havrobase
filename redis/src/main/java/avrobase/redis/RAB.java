@@ -123,8 +123,47 @@ public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   }
 
   @Override
-  public boolean put(String row, T value, long version) throws AvroBaseException {
-    throw new NotImplementedException();
+  public boolean put(final String row, final T value, final long version) throws AvroBaseException {
+    try {
+      boolean returned = false;
+      final Jedis j = pool.getResource();
+      try {
+        j.select(db);
+        Schema schema = value.getSchema();
+        String schemaKey = hashCache.get(schema);
+        if (schemaKey == null) {
+          final String doc = schema.toString();
+          schemaKey = createSchemaKey(schema, doc);
+          j.set(schemaKey + z, doc);
+        }
+        String watch = j.watch(row + v);
+        if (!watch.equals("OK")) {
+          return false;
+        }
+        String v = j.get(row + RAB.v);
+        if (!v.equals(String.valueOf(version))) {
+          return false;
+        }
+        final String finalSchemaKey = schemaKey;
+        List<Object> results = j.multi(new TransactionBlock() {
+          @Override
+          public void execute() throws JedisException {
+            incr(row + RAB.v);
+            set(row + s, finalSchemaKey);
+            set(row + d, new String(serialize(value), UTF8));
+          }
+        });
+        return results != null;
+      } catch (Exception e) {
+        pool.returnBrokenResource(j);
+        returned = true;
+        throw new AvroBaseException(e);
+      } finally {
+        if (!returned) pool.returnResource(j);
+      }
+    } catch (TimeoutException e) {
+      throw new AvroBaseException("Timed out", e);
+    }
   }
 
   @Override

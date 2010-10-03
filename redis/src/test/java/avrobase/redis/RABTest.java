@@ -9,6 +9,8 @@ import redis.clients.jedis.JedisPool;
 import java.nio.ByteBuffer;
 
 import static junit.framework.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * TODO: Edit this
@@ -20,19 +22,45 @@ import static junit.framework.Assert.assertEquals;
 public class RABTest {
   @Test
   public void setGet() {
+    RAB<User> userRAB = getRAB();
+    User user = getUser();
+    userRAB.put("test", user);
+    Row<User,String> test = userRAB.get("test");
+    assertEquals(user, test.value);
+  }
+
+  @Test
+  public void putWithVersion() {
+    RAB<User> userRAB = getRAB();
+    User user = getUser();
+    userRAB.put("test", user);
+    Row<User,String> test = userRAB.get("test");
+    assertEquals(user, test.value);
+
+    assertTrue(userRAB.put("test", user, test.version));
+    assertFalse(userRAB.put("test", user, test.version));
+  }
+
+  private RAB<User> getRAB() {
+    JedisPool pool = getPool();
+
+    return new RAB<User>(pool, 0, User.SCHEMA$);
+  }
+
+  private JedisPool getPool() {
     JedisPool pool = new JedisPool("localhost");
     pool.init();
-    
-    RAB<User> userRAB = new RAB<User>(pool, 0, User.SCHEMA$);
+    return pool;
+  }
+
+  private User getUser() {
     User user = new User();
     user.email = $("spullara@yahoo.com");
     user.firstName = $("Sam");
     user.lastName = $("Pullara");
     user.image = $("");
     user.password = ByteBuffer.allocate(0);
-    userRAB.put("test", user);
-    Row<User,String> test = userRAB.get("test");
-    assertEquals(user, test.value);
+    return user;
   }
 
   Utf8 $(String s) {
