@@ -7,6 +7,7 @@ import org.apache.avro.util.Utf8;
 import org.junit.Test;
 import redis.clients.jedis.JedisPool;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -74,7 +75,7 @@ public class RABTest {
   }
 
   @Test
-  public void multithreadedContention() throws InterruptedException {
+  public void multithreadedContention() throws InterruptedException, IOException {
     final RAB<User> userRAB = getRAB();
     User user = getUser();
     final List<String> keys = new ArrayList<String>();
@@ -123,7 +124,6 @@ public class RABTest {
     for (int i = 0; i < 100; i++) {
       keys.add(userRAB.create(user));
     }
-    final Random r = new SecureRandom();
     ExecutorService es = Executors.newCachedThreadPool();
     final AtomicInteger failures = new AtomicInteger(0);
     final AtomicInteger total = new AtomicInteger(0);

@@ -45,6 +45,7 @@
             <phase>generate-sources</phase>
             <configuration>
               <sourceDirectory>src/test/avro</sourceDirectory>
+              <outputDirectory>target/test-classes</outputDirectory>
               <includes>
                 <include>**/*.json</include>
               </includes>
@@ -65,7 +66,7 @@
             <!-- id is optional -->
             <configuration>
               <sourceDirectory>${project.build.directory}/generated-sources/avro</sourceDirectory>
-              <outputDirectory>${project.build.directory}/classes</outputDirectory>
+              <outputDirectory>${project.build.directory}/test-classes</outputDirectory>
             </configuration>
             <goals>
               <goal>generate</goal>
