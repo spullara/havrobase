@@ -69,7 +69,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
           if (!tables.next()) {
             // Create the table
             Statement statement = connection.createStatement();
-            statement.executeUpdate("CREATE TABLE " + mysqlTableName + " ( row varbinary(256) primary key, schema_id integer not null, version integer not null, format tinyint not null, avro mediumblob not null )");
+            statement.executeUpdate("CREATE TABLE " + mysqlTableName + " ( row varbinary(256) primary key, schema_id integer not null, version integer not null, format tinyint not null, avro mediumblob not null ) ENGINE=INNODB");
             statement.close();
           }
           tables.close();
@@ -79,7 +79,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
           if (!tables.next()) {
             // Create the table
             Statement statement = connection.createStatement();
-            statement.executeUpdate("CREATE TABLE " + this.schemaTable + " ( id integer primary key auto_increment, hash varbinary(256) not null, json longblob not null )");
+            statement.executeUpdate("CREATE TABLE " + this.schemaTable + " ( id integer primary key auto_increment, hash varbinary(256) not null, json longblob not null ) ENGINE=INNODB");
             statement.close();
           } else {
             // Load schemas
