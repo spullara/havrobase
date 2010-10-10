@@ -20,7 +20,12 @@ import thepusher.PusherBase;
 import javax.sql.DataSource;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Random;
 
 import static junit.framework.Assert.assertEquals;
@@ -119,6 +124,46 @@ public class ShardedAvroBaseTest {
     @Override
     public void init(byte[] representation) {
     }
+
+    @Override
+    public Iterable<String> scanKeys(String start, String end) throws AvroBaseException {
+      final byte[] startRow = start == null ? null : keytx.toBytes(start);
+      final byte[] stopRow = end == null ? null : keytx.toBytes(end);
+      StringBuilder statement = new StringBuilder("SELECT row FROM ");
+      statement.append(mysqlTableName);
+      if (startRow != null) {
+        statement.append(" WHERE row >= ?");
+      }
+      if (stopRow != null) {
+        if (startRow == null) {
+          statement.append(" WHERE row < ?");
+        } else {
+          statement.append(" AND row < ?");
+        }
+      }
+      return new Query<Iterable<String>>(statement.toString()) {
+        public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+          int i = 1;
+          if (startRow != null) {
+            ps.setBytes(i++, startRow);
+          }
+          if (stopRow != null) {
+            ps.setBytes(i, stopRow);
+          }
+        }
+
+        public Iterable<String> execute(final ResultSet rs) throws AvroBaseException, SQLException {
+          // TODO: Can't stream this yet due to database cursors
+          List<String> rows = new ArrayList<String>();
+          while (rs.next()) {
+            byte[] row = rs.getBytes(1);
+              rows.add(keytx.fromBytes(row));
+          }
+          return rows;
+        }
+      }.query();
+
+    }
   }
 
   @Test
@@ -137,14 +182,15 @@ public class ShardedAvroBaseTest {
   }
 
   @Test
-  public void create20andShard() {
+  public void shard() {
     Pusher<SC> pusher = PusherBase.create(SC.class, Inject.class);
     pusher.bindInstance(SC.KEY_COMPARATOR, STRING_COMPARATOR);
     pusher.bindClass(SC.STRATEGY, ShardingStrategy.Partition.class);
     @SuppressWarnings({"unchecked"}) ShardedAvroBase<User, String> sab = pusher.create(ShardedAvroBase.class);
     sab.addShard(mab1, 1.0, false);
 
-    for (int i = 0; i < 20; i++) {
+    int T = 1000;
+    for (int i = 0; i < T; i++) {
       User user = getUser();
       String row = KEYTX.newKey();
       user.firstName = new Utf8(user.firstName.toString() + row);
@@ -155,51 +201,51 @@ public class ShardedAvroBaseTest {
 
     // Verify there are 500 in mab1 and 1500 in mab2
     int count = 0;
-    for (Row<User, String> tRow : mab1.scan((String) null, null)) {
+    for (String tRow : mab1.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(5, count);
-    for (Row<User, String> tRow : mab2.scan((String) null, null)) {
+    assertEquals(T/4, count);
+    for (String tRow : mab2.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(20, count);
+    assertEquals(T, count);
 
     sab.addShard(mab3, 1.0, true);
 
     // Verify there are 500 in mab1 and 1500 in mab2
     count = 0;
-    for (Row<User, String> tRow : mab1.scan((String) null, null)) {
+    for (String tRow : mab1.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(4, count);
-    for (Row<User, String> tRow : mab2.scan((String) null, null)) {
+    assertEquals(T/5, count);
+    for (String tRow : mab2.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(16, count);
-    for (Row<User, String> tRow : mab3.scan((String) null, null)) {
+    assertEquals(T/5*4, count);
+    for (String tRow : mab3.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(20, count);
+    assertEquals(T, count);
 
     sab.addShard(mab4, 5.0, true);
     
     count = 0;
-    for (Row<User, String> tRow : mab1.scan((String) null, null)) {
+    for (String tRow : mab1.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(2, count);
-    for (Row<User, String> tRow : mab2.scan((String) null, null)) {
+    assertEquals(T/10, count);
+    for (String tRow : mab2.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(8, count);
-    for (Row<User, String> tRow : mab3.scan((String) null, null)) {
+    assertEquals(T/10*4, count);
+    for (String tRow : mab3.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(10, count);
-    for (Row<User, String> tRow : mab4.scan((String) null, null)) {
+    assertEquals(T/10*5, count);
+    for (String tRow : mab4.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(20, count);
+    assertEquals(T, count);
   }
 
   @AfterClass

@@ -42,7 +42,7 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
     private final Lock readShards = lock.readLock();
     private final List<PartitionedShard<T, K>> activeShards = new ArrayList<PartitionedShard<T, K>>();
     private final List<PartitionedShard<T, K>> usedShards = new ArrayList<PartitionedShard<T, K>>();
-    private final Set<AvroBase<T, K>> addedAvroBase = Collections.synchronizedSet(new HashSet<AvroBase<T, K>>());
+    private final Set<ShardableAvroBase<T, K>> addedAvroBase = Collections.synchronizedSet(new HashSet<ShardableAvroBase<T, K>>());
 
     private final Comparator<K> comparator;
     private final ExecutorService balancePool;
@@ -58,7 +58,7 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
       private K start;
       private long count;
 
-      public PartitionedShard(AvroBase<T, K> tkAvroBase, double weight, K start) {
+      public PartitionedShard(ShardableAvroBase<T, K> tkAvroBase, double weight, K start) {
         super(tkAvroBase, weight);
         this.start = start;
       }
@@ -122,7 +122,7 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
                   public Long call() throws Exception {
                     long count = 0;
                     K end = finalI + 1 == activeShards.size() ? null : activeShards.get(finalI + 1).start;
-                    for (Row<T, K> row : shard.avrobase().scan(shard.start, end)) {
+                    for (K row : shard.avrobase().scanKeys(shard.start, end)) {
                       // TODO: Add a method to AvroBase that gives only keys back
                       count++;
                     }
@@ -159,23 +159,23 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
                 long newcount = (long) (total * shard.weight() / totalWeight);
                 current = null;
                 K end = j + 1 == newShards.size() ? null : newShards.get(j + 1).start;
-                for (Row<T, K> tRow : shard.avrobase().scan(shard.start, end)) {
+                for (K tRow : shard.avrobase().scanKeys(shard.start, end)) {
                   if (newcount-- <= 0) {
                     if (nextShard == null) {
                       break;
                     } else {
                       // The start is the first row that wasn't in the last shard
                       if (current != null) {
-                        nextShard.start = tRow.row;
+                        nextShard.start = tRow;
                         current = null;
                       }
                       // Copy all the remaining rows from this shard to the next
-                      nextShard.avrobase().put(tRow.row, tRow.value);
+                      nextShard.avrobase().put(tRow, shard.avrobase().get(tRow).value);
                       // Remove them from this shard
-                      shard.avrobase().delete(tRow.row);
+                      shard.avrobase().delete(tRow);
                     }
                   } else {
-                    current = tRow.row;
+                    current = tRow;
                   }
                 }
               }

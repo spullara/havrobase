@@ -11,15 +11,15 @@ import org.apache.avro.specific.SpecificRecord;
  * Time: 9:59 AM
  */
 public class Shard<T extends SpecificRecord, K> {
-  private final AvroBase<T, K> avroBase;
+  private final ShardableAvroBase<T, K> avroBase;
   private final double weight;
 
-  public Shard(AvroBase<T, K> avroBase, double weight) {
+  public Shard(ShardableAvroBase<T, K> avroBase, double weight) {
     this.avroBase = avroBase;
     this.weight = weight;
   }
 
-  public AvroBase<T,K> avrobase() {
+  public ShardableAvroBase<T,K> avrobase() {
     return avroBase;
   }
 

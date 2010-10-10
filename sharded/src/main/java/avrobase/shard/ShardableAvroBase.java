@@ -1,6 +1,7 @@
 package avrobase.shard;
 
 import avrobase.AvroBase;
+import avrobase.AvroBaseException;
 import org.apache.avro.specific.SpecificRecord;
 
 /**
@@ -11,6 +12,7 @@ import org.apache.avro.specific.SpecificRecord;
  * Time: 12:06 PM
  */
 public interface ShardableAvroBase<T extends SpecificRecord, K> extends AvroBase<T, K> {
-  byte[] representation();
-  void init(byte[] representation);
+  byte[] representation() throws AvroBaseException;
+  void init(byte[] representation) throws AvroBaseException;
+  Iterable<K> scanKeys(K start, K end) throws AvroBaseException;
 }
