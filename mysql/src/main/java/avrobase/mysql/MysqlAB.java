@@ -180,9 +180,14 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   }
 
   @Override
-  public void delete(K row) throws AvroBaseException {
+  public void delete(final K row) throws AvroBaseException {
     final byte[] key = keytx.toBytes(row);
-    // TODO
+    new Update("DELETE FROM " + mysqlTableName + " WHERE row=?") {
+      @Override
+      void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+        ps.setBytes(1, key);
+      }
+    }.insert();
   }
 
   @Override

@@ -12,6 +12,7 @@
     <module>memcached</module>
     <module>mysql</module>
     <module>redis</module>
+    <module>sharded</module>
   </modules>
   <packaging>pom</packaging>
 
