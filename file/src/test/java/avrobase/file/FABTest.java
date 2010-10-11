@@ -40,7 +40,7 @@ public class FABTest {
   }
 
   @Test
-  public void get() {
+  public void putGet2() {
     FAB<User> userRAB = getFAB();
     User user = getUser();
     Row<User, String> test = userRAB.get("test");
@@ -55,7 +55,7 @@ public class FABTest {
       public String get() {
         return String.valueOf(random.nextLong());
       }
-    }, User.SCHEMA$, AvroFormat.JSON);
+    }, User.SCHEMA$, AvroFormat.BINARY);
   }
 
   @Test
