@@ -199,7 +199,6 @@ public class ShardedAvroBaseTest {
 
     sab.addShard(mab2, 3.0, true);
 
-    // Verify there are 500 in mab1 and 1500 in mab2
     int count = 0;
     for (String tRow : mab1.scanKeys(null, null)) {
       count++;
@@ -212,7 +211,6 @@ public class ShardedAvroBaseTest {
 
     sab.addShard(mab3, 1.0, true);
 
-    // Verify there are 500 in mab1 and 1500 in mab2
     count = 0;
     for (String tRow : mab1.scanKeys(null, null)) {
       count++;
@@ -228,24 +226,28 @@ public class ShardedAvroBaseTest {
     assertEquals(T, count);
 
     sab.addShard(mab4, 5.0, true);
-    
+
+    for (int i = 0; i < T; i++) {
+      User user = getUser();
+      String row = KEYTX.newKey();
+      user.firstName = new Utf8(user.firstName.toString() + row);
+      sab.put(row, user);
+    }
+
     count = 0;
     for (String tRow : mab1.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(T/10, count);
     for (String tRow : mab2.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(T/10*4, count);
     for (String tRow : mab3.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(T/10*5, count);
     for (String tRow : mab4.scanKeys(null, null)) {
       count++;
     }
-    assertEquals(T, count);
+    assertEquals(T*2, count);
   }
 
   @AfterClass

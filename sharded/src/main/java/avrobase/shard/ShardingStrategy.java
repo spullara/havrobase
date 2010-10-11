@@ -56,7 +56,6 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
 
     static class PartitionedShard<T extends SpecificRecord, K> extends Shard<T, K> {
       private K start;
-      private long count;
 
       public PartitionedShard(ShardableAvroBase<T, K> tkAvroBase, double weight, K start) {
         super(tkAvroBase, weight);
@@ -126,7 +125,6 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
                       // TODO: Add a method to AvroBase that gives only keys back
                       count++;
                     }
-                    shard.count = count;
                     return count;
                   }
                 }));

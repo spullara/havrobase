@@ -13,6 +13,7 @@
     <module>mysql</module>
     <module>redis</module>
     <module>sharded</module>
+    <module>file</module>
   </modules>
   <packaging>pom</packaging>
 
