@@ -19,7 +19,6 @@ import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.MasterNotRunningException;
-import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
@@ -84,8 +83,6 @@ public class HABTest {
       try {
         admin = new HBaseAdmin(HBaseConfiguration.create());
       } catch (MasterNotRunningException e) {
-        throw new RuntimeException(e);
-      } catch (ZooKeeperConnectionException e) {
         throw new RuntimeException(e);
       }
     }
