@@ -33,9 +33,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   private final DataSource datasource;
   private final AvroFormat storageFormat;
-  private final String mysqlTableName;
   private final String schemaTable;
-  private final KeyStrategy<K> keytx;
+  protected final String mysqlTableName;
+  protected final KeyStrategy<K> keytx;
 
   // Caches
   private Map<Integer, Schema> abbrevSchema = new ConcurrentHashMap<Integer, Schema>();
@@ -84,10 +84,10 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
           } else {
             // Load schemas
             new Query<Void>("SELECT id, hash, json FROM " + MysqlAB.this.schemaTable) {
-              void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+              public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
               }
 
-              Void execute(ResultSet rs) throws AvroBaseException, SQLException {
+              public Void execute(ResultSet rs) throws AvroBaseException, SQLException {
                 while (rs.next()) {
                   int id = rs.getInt(1);
                   String hash = new String(rs.getBytes(2));
@@ -127,11 +127,11 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
           schemaKey = new String(Hex.encodeHex(md.digest(doc.getBytes())));
         }
         id = new Query<Integer>("SELECT id FROM " + schemaTable + " WHERE hash=?") {
-          void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+          public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
             ps.setBytes(1, schemaKey.getBytes());
           }
 
-          Integer execute(ResultSet rs) throws AvroBaseException, SQLException {
+          public Integer execute(ResultSet rs) throws AvroBaseException, SQLException {
             if (rs.next()) {
               return rs.getInt(1);
             } else {
@@ -180,9 +180,14 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   }
 
   @Override
-  public void delete(K row) throws AvroBaseException {
+  public void delete(final K row) throws AvroBaseException {
     final byte[] key = keytx.toBytes(row);
-    // TODO
+    new Update("DELETE FROM " + mysqlTableName + " WHERE row=?") {
+      @Override
+      void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+        ps.setBytes(1, key);
+      }
+    }.insert();
   }
 
   @Override
@@ -261,18 +266,18 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   }
 
 
-  private abstract class Query<R> {
+  protected abstract class Query<R> {
     private String statement;
 
-    Query(String statement) {
+    protected Query(String statement) {
       this.statement = statement;
     }
 
-    abstract void setup(PreparedStatement ps) throws AvroBaseException, SQLException;
+    public abstract void setup(PreparedStatement ps) throws AvroBaseException, SQLException;
 
-    abstract R execute(ResultSet rs) throws AvroBaseException, SQLException;
+    public abstract R execute(ResultSet rs) throws AvroBaseException, SQLException;
 
-    R query() throws AvroBaseException {
+    public R query() throws AvroBaseException {
       try {
         Connection c = null;
         PreparedStatement ps = null;
@@ -296,11 +301,11 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
   public Row<T, K> get(final byte[] row) throws AvroBaseException {
     return new Query<Row<T, K>>("SELECT schema_id, version, format, avro FROM " + mysqlTableName + " WHERE row=?") {
-      void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+      public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
         ps.setBytes(1, row);
       }
 
-      Row<T, K> execute(ResultSet rs) throws AvroBaseException, SQLException {
+      public Row<T, K> execute(ResultSet rs) throws AvroBaseException, SQLException {
         if (rs.next()) {
           int schema_id = rs.getInt(1);
           long version = rs.getLong(2);
@@ -323,11 +328,11 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
     Schema schema = abbrevSchema.get(schema_id);
     if (schema == null) {
       schema = new Query<Schema>("SELECT id, hash, json FROM " + schemaTable + " WHERE id=?") {
-        void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+        public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
           ps.setInt(1, schema_id);
         }
 
-        Schema execute(ResultSet rs) throws AvroBaseException, SQLException {
+        public Schema execute(ResultSet rs) throws AvroBaseException, SQLException {
           if (rs.next()) {
             String hash = new String(rs.getBytes(2));
             return loadSchema(schema_id, hash, rs.getBytes(3));
@@ -429,7 +434,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
       }
     }
     return new Query<Iterable<Row<T, K>>>(statement.toString()) {
-      void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+      public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
         int i = 1;
         if (startRow != null) {
           ps.setBytes(i++, startRow);
@@ -439,7 +444,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
         }
       }
 
-      Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
+      public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
         // TODO: Can't stream this yet due to database cursors
         List<Row<T, K>> rows = new ArrayList<Row<T, K>>();
         while (rs.next()) {

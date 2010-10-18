@@ -33,7 +33,7 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
 
   protected Map<String, Schema> schemaCache = new ConcurrentHashMap<String, Schema>();
   protected Map<Schema, String> hashCache = new ConcurrentHashMap<Schema, String>();
-  private Schema actualSchema;
+  protected Schema actualSchema;
   protected AvroFormat format;
 
   protected static final Charset UTF8 = Charset.forName("utf-8");

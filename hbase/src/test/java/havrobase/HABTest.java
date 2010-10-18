@@ -36,11 +36,17 @@ import org.junit.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -339,6 +345,59 @@ public class HABTest {
     } finally {
       pool.putTable(userTable);
     }
+  }
+
+  @Test
+  public void multiThreaded() throws InterruptedException {
+    final AvroBase<User, byte[]> userHAB = AvroBaseFactory.createAvroBase(new HABModule(), HAB.class, AvroFormat.BINARY);
+    User user = getUser();
+    final List<byte[]> keys = new ArrayList<byte[]>();
+    for (int i = 0; i < 100; i++) {
+      keys.add(userHAB.create(user));
+    }
+    final Random r = new SecureRandom();
+    ExecutorService es = Executors.newCachedThreadPool();
+    final AtomicInteger failures = new AtomicInteger(0);
+    final AtomicInteger total = new AtomicInteger(0);
+    final Semaphore s = new Semaphore(100);
+    long start = System.currentTimeMillis();
+    for (int i = 0; i < 20; i++) {
+      s.acquireUninterruptibly();
+      es.submit(new Runnable() {
+        @Override
+        public void run() {
+          try {
+            for (int i = 0; i < 500; i++) {
+              total.incrementAndGet();
+              byte[] key = keys.get(r.nextInt(keys.size()));
+              Row<User, byte[]> userStringRow = userHAB.get(key);
+              if (!userHAB.put(key, userStringRow.value, userStringRow.version)) {
+                failures.incrementAndGet();
+              }
+            }
+          } catch (Exception e) {
+            e.printStackTrace();
+          } finally {
+            s.release();
+          }
+        }
+      });
+    }
+    s.acquireUninterruptibly(100);
+    es.shutdown();
+    es.awaitTermination(1000, TimeUnit.SECONDS);
+    System.out.println(failures + " out of " + total + " in " + (System.currentTimeMillis() - start) + "ms");
+
+  }
+
+  private User getUser() {
+    User user = new User();
+    user.email = $("spullara@yahoo.com");
+    user.firstName = $("Sam");
+    user.lastName = $("Pullara");
+    user.image = $("");
+    user.password = ByteBuffer.allocate(0);
+    return user;
   }
 
   @Test

@@ -1,0 +1,21 @@
+Sharding mechanism for AvroBase
+
+- A sharded AvroBase starts with no shards at all, only a reference to the sharding strategy where
+  all the book keeping is done
+- The sharding strategy determines how keys will be divided between shards
+  - Partition: the keyspace is divided when a new shard is added and each shard has a contiguous set of keys
+  - Bin: each shard contains a set of bins that are produced by some modulo the hash of the key
+- Adding a new shard redistributes keys over time
+  - When a new client adds a shard, it is automatically elected as the migrator
+    - If the migrator fails, a new migrator is elected through a race
+    - Only a single migration can be active, if more shards are added they are queued
+  - The migrator redistributes the keys to the new set of shards
+  - The shard is then activated and the keys are deleted from the old shards
+  - Before activation, things proceed as if nothing has changed
+  - After activation all clients use the new shard distribution
+    - ZooKeeper allows us to coordinate this
+  - The smooth transition is done by continuously scanning the keyspace for new records
+    - After some number of iterations the relevant keyspace is locked and the new shard is activated
+    - ZooKeeper coordinates this transition
+- All AvroBase methods are implemented transparently to the client
+  - The sharding strategy answers questions about keys and ranges for the sharded avrobase
