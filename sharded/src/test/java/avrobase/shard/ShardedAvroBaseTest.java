@@ -141,7 +141,7 @@ public class ShardedAvroBaseTest {
           statement.append(" AND row < ?");
         }
       }
-      return new Query<Iterable<String>>(statement.toString()) {
+      return new Query<Iterable<String>>(datasource, statement.toString()) {
         public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
           int i = 1;
           if (startRow != null) {

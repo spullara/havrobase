@@ -244,6 +244,7 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> imple
         raf.write(ByteBuffer.wrap(new byte[8]).putLong(version).array());
         raf.write(serialize(value));
       } finally {
+        channel.force(false);
         fileLock.release();
         channel.close();
         raf.close();
@@ -299,6 +300,7 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> imple
         raf.write(serialize(value));
         return true;
       } finally {
+        channel.force(false);
         fileLock.release();
         channel.close();
         raf.close();
