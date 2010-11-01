@@ -35,7 +35,7 @@
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase</artifactId>
-      <version>0.89.0-SNAPSHOT</version>
+      <version>0.89.0-20100828.154136-20</version>
       <exclusions>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>

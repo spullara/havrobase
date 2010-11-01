@@ -40,6 +40,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Long> implements Searchable<T,Long, IndexQuery<?>> {
   private static final Joiner COMMAS = Joiner.on(',').skipNulls();
   private static final Joiner SPACES = Joiner.on(' ').skipNulls();
+  private static final Joiner EQUALS = Joiner.on('=');
   private static final AvroFormat AVRO_FORMAT = AvroFormat.BINARY;
   private static final String[] BASE_COLS = new String[]{"id", "version", "schema_id", "avro"};
 
@@ -79,11 +80,30 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
     final String insertParamClause = paramClause(BASE_COLS.length + Iterables.size(indexColumns) + (relation != null ? 2 : 0));
     insertStatement = "INSERT INTO " + table + " (" + insertColsClause + ") VALUES " + insertParamClause;
     upsertStatement = "INSERT INTO " + table + insertColsClause + " VALUES " + insertParamClause + " ON DUPLICATE KEY UPDATE schema_id=values(schema_id), version = version + 1, avro=values(avro)";
-    updateStatement = "UPDATE " + table + " SET schema_id=?, version=version+1, avro=? WHERE id=? AND version=?";
+    updateStatement = "UPDATE " + table + " SET schema_id=?,version=version+1,avro=?" + updateIndexClause() + " WHERE id=? AND version=?";
     selectStatement = "SELECT schema_id, version, avro FROM " + table + " WHERE id=?";
     selectIndexBaseStatement = "SELECT id, schema_id, version, avro FROM " + table + " WHERE";
 
     createTables();
+  }
+
+  // TODO: ugly
+  public String updateIndexClause() {
+    List<String> clauses = new LinkedList<String>();
+
+    if (relation != null) {
+      clauses.add(relation.getLeft().getColumnName() + "=?");
+      clauses.add(relation.getRight().getColumnName() + "=?");
+    }
+    for (IndexColumn<?, ?> idx : indexColumns) {
+      clauses.add(idx.getColumnName() + "=?");
+    }
+
+    if (clauses.size() > 0) {
+      return "," + COMMAS.join(clauses);
+    } else {
+      return "";
+    }
   }
 
   public String generateDdl() {
@@ -330,10 +350,21 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
     } else {
       int updated = new Update(updateStatement) {
         void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
-          ps.setInt(1, schemaId);
-          ps.setBytes(2, serialize(value));
-          ps.setLong(3, id);
-          ps.setLong(4, version);
+          int i = 1;
+          ps.setInt(i++, schemaId);
+          ps.setBytes(i++, serialize(value));
+
+          if (relation != null) {
+            ps.setLong(i++, relation.getLeft().valueFunction().apply(value));
+            ps.setLong(i++, relation.getRight().valueFunction().apply(value));
+          }
+
+          for (IndexColumn<T, ?> ic : indexColumns) {
+            ps.setObject(i++, ic.valueFunction().apply(value), ic.getColumnSqlType());
+          }
+
+          ps.setLong(i++, id);
+          ps.setLong(i, version);
         }
       }.insert();
       if (updated == 0) {
@@ -362,12 +393,15 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
 
   @Override
   public void delete(Long row) throws AvroBaseException {
+    //TODO:1
     throw new NotImplementedException();
   }
 
   @Override
   public Iterable<Row<T, Long>> scan(Long startRow, Long stopRow) throws AvroBaseException {
-    throw new NotImplementedException();
+    //throw new NotImplementedException();
+    //TODO:0
+    return Collections.emptyList();
   }
 
   @Override

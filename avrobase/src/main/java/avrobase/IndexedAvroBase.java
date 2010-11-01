@@ -12,7 +12,7 @@ import org.apache.avro.specific.SpecificRecord;
  * @author john
  */
 public class IndexedAvroBase<T extends SpecificRecord, K, Q> extends ForwardingAvroBase<T, K> implements Searchable<T,K,Q> {
-  private final Index<T,K,Q> index;
+  protected final Index<T,K,Q> index;
 
   @Inject
   public IndexedAvroBase(final AvroBase<T, K> delegate, final Index<T, K, Q> index) {
