@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
 
 import static junit.framework.Assert.assertEquals;
 
@@ -112,8 +113,8 @@ public class ShardedAvroBaseTest {
   }
 
   public static class ShardableMysqlAB extends MysqlAB<User, String> implements ShardableAvroBase<User, String> {
-    public ShardableMysqlAB(DataSource datasource, java.lang.String table, java.lang.String family, java.lang.String schemaTable, Schema schema, AvroFormat storageFormat, KeyStrategy<String> keytx) throws AvroBaseException {
-      super(datasource, table, family, schemaTable, schema, storageFormat, keytx);
+    public ShardableMysqlAB(ExecutorService es, DataSource datasource, java.lang.String table, java.lang.String family, java.lang.String schemaTable, Schema schema, AvroFormat storageFormat, KeyStrategy<String> keytx) throws AvroBaseException {
+      super(es, datasource, table, family, schemaTable, schema, storageFormat, keytx);
     }
 
     @Override
