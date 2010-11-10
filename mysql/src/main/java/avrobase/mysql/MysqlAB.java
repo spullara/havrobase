@@ -1,6 +1,9 @@
 package avrobase.mysql;
 
-import avrobase.*;
+import avrobase.AvroBaseException;
+import avrobase.AvroBaseImpl;
+import avrobase.AvroFormat;
+import avrobase.Row;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
@@ -17,10 +20,18 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Queue;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Mysql backed implementation of Avrobase.
@@ -31,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * TODO: consider column-type-specific support (via keytx)
  */
 public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
+  private final ExecutorService es;
   protected final DataSource datasource;
   private final AvroFormat storageFormat;
   private final String schemaTable;
@@ -43,6 +55,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
   @Inject
   public MysqlAB(
+      ExecutorService es,
       DataSource datasource,
       String table,
       String family,
@@ -52,6 +65,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
       KeyStrategy<K> keytx) throws AvroBaseException {
 
     super(schema, storageFormat);
+    this.es = es;
     this.datasource = datasource;
     this.schemaTable = schemaTable;
     this.storageFormat = storageFormat;
@@ -426,7 +440,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   }
 
   public Iterable<Row<T, K>> scan(final byte[] startRow, final byte[] stopRow) throws AvroBaseException {
-    StringBuilder statement = new StringBuilder("SELECT row, schema_id, version, format, avro FROM ");
+    final StringBuilder statement = new StringBuilder("SELECT row, schema_id, version, format, avro FROM ");
     statement.append(mysqlTableName);
     if (startRow != null) {
       statement.append(" WHERE row >= ?");
@@ -438,36 +452,110 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
         statement.append(" AND row < ?");
       }
     }
-    return new Query<Iterable<Row<T, K>>>(datasource, statement.toString()) {
-      public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
-        int i = 1;
-        if (startRow != null) {
-          ps.setBytes(i++, startRow);
-        }
-        if (stopRow != null) {
-          ps.setBytes(i, stopRow);
-        }
+    statement.append(" ORDER BY row ASC");
+    final boolean[] done = new boolean[1];
+    final Queue<Row<T, K>> queue = new ConcurrentLinkedQueue<Row<T, K>>() {
+      @Override
+      public synchronized boolean isEmpty() {
+        return super.isEmpty() && done[0];
       }
-
-      public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
-        // TODO: Can't stream this yet due to database cursors
-        List<Row<T, K>> rows = new ArrayList<Row<T, K>>();
-        while (rs.next()) {
-          byte[] row = rs.getBytes(1);
-          int schema_id = rs.getInt(2);
-          long version = rs.getLong(3);
-          AvroFormat format = AvroFormat.values()[rs.getByte(4)];
-          byte[] avro = rs.getBytes(5);
-          Schema schema = getSchema(schema_id);
-          if (schema != null) {
-            rows.add(new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version));
-          } else {
-            // TODO: logging
-            System.err.println("skipped row because of missing schema: " + keytx.fromBytes(row) + " schema " + schema_id);
+    };
+    final Future<Void> submit = es.submit(new Callable<Void>() {
+      public Void call() throws Exception {
+        new Query<Iterable<Row<T, K>>>(datasource, statement.toString()) {
+          public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+            int i = 1;
+            if (startRow != null) {
+              ps.setBytes(i++, startRow);
+            }
+            if (stopRow != null) {
+              ps.setBytes(i, stopRow);
+            }
           }
-        }
-        return rows;
+
+          public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
+            while (rs.next()) {
+              byte[] row = rs.getBytes(1);
+              int schema_id = rs.getInt(2);
+              long version = rs.getLong(3);
+              AvroFormat format = AvroFormat.values()[rs.getByte(4)];
+              byte[] avro = rs.getBytes(5);
+              Schema schema = getSchema(schema_id);
+              if (schema != null) {
+                queue.add(new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version));
+                synchronized (queue) {
+                  queue.notify();
+                }
+              } else {
+                // TODO: logging
+                System.err.println("skipped row because of missing schema: " + keytx.fromBytes(row) + " schema " + schema_id);
+              }
+            }
+            synchronized (queue) {
+              done[0] = true;
+              queue.notify();
+            }
+            return null;
+          }
+        }.query();
+        return null;
       }
-    }.query();
+    });
+
+    return new Iterable<Row<T, K>>() {
+
+      @Override
+      public Iterator<Row<T, K>> iterator() {
+        return new Iterator<Row<T, K>>() {
+          protected Row<T, K> tkRow;
+
+          @Override
+          public boolean hasNext() {
+            try {
+              submit.get(0, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+              // ignore
+            } catch (ExecutionException e) {
+              throw new AvroBaseException(e);
+            } catch (TimeoutException e) {
+              // ignore, not done yet
+            }
+            synchronized (queue) {
+              while (tkRow == null && (tkRow = queue.poll()) == null && !queue.isEmpty()) {
+                try {
+                  queue.wait();
+                } catch (InterruptedException e) {
+                  // interrupted
+                }
+              }
+            }
+            return tkRow != null;
+          }
+
+          @Override
+          public Row<T, K> next() {
+            try {
+              submit.get(0, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+              // ignore
+            } catch (ExecutionException e) {
+              throw new AvroBaseException(e);
+            } catch (TimeoutException e) {
+              // ignore, not done yet
+            }
+            if (hasNext() && tkRow != null) {
+              Row<T, K> tmp = tkRow;
+              tkRow = null;
+              return tmp;
+            }
+            throw new NoSuchElementException();
+          }
+
+          @Override
+          public void remove() {
+          }
+        };
+      }
+    };
   }
 }
