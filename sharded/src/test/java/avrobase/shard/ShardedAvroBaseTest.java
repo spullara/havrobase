@@ -28,6 +28,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static junit.framework.Assert.assertEquals;
 
@@ -97,11 +98,12 @@ public class ShardedAvroBaseTest {
     config.setUsername("sam");
     config.setPassword("");
     BoneCPDataSource ds = new BoneCPDataSource(config);
+    ExecutorService es = Executors.newCachedThreadPool();
 
-    mab1 = new ShardableMysqlAB(ds, "user", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
-    mab2 = new ShardableMysqlAB(ds, "user2", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
-    mab3 = new ShardableMysqlAB(ds, "user3", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
-    mab4 = new ShardableMysqlAB(ds, "user4", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
+    mab1 = new ShardableMysqlAB(es, ds, "user", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
+    mab2 = new ShardableMysqlAB(es, ds, "user2", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
+    mab3 = new ShardableMysqlAB(es, ds, "user3", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
+    mab4 = new ShardableMysqlAB(es, ds, "user4", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
     AVRO_BASES = new AvroBase[] {mab1, mab2, mab3, mab4};
 
     //noinspection unchecked
