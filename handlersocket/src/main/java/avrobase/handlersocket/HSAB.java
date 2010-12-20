@@ -7,7 +7,6 @@ import avrobase.mysql.KeyStrategy;
 import avrobase.mysql.MysqlAB;
 import com.google.code.hs4j.HSClient;
 import com.google.code.hs4j.IndexSession;
-import com.google.code.hs4j.exception.HandlerSocketException;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
@@ -15,7 +14,6 @@ import org.apache.avro.specific.SpecificRecord;
 import javax.sql.DataSource;
 import java.sql.ResultSet;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeoutException;
 
 /**
  * HandlerSocket AvroBase is just a thin layer on top of Mysql with different access pattern for the
@@ -26,16 +24,14 @@ import java.util.concurrent.TimeoutException;
  * Time: 12:25 PM
  */
 public class HSAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
-  private final HSClient hsClient;
-  private IndexSession primary;
+  private IndexSession session;
 
   @Inject
-  public HSAB(ExecutorService es, DataSource datasource, HSClient hsClient, String table, String family,
-              String schemaTable, Schema schema, AvroFormat storageFormat, KeyStrategy<K> keytx, String database) throws AvroBaseException {
+  public HSAB(ExecutorService es, DataSource datasource, HSClient hsClient, String database, String table, String family,
+              String schemaTable, Schema schema, AvroFormat storageFormat, KeyStrategy<K> keytx) throws AvroBaseException {
     super(es, datasource, table, family, schemaTable, schema, storageFormat, keytx);
-    this.hsClient = hsClient;
     try {
-      primary = hsClient.openIndexSession(database, mysqlTableName, "PRIMARY", new String[]{"schema_id", "version", "format", "avro"});
+      session = hsClient.openIndexSession(database, mysqlTableName, "PRIMARY", new String[]{"schema_id", "version", "format", "avro"});
     } catch (Exception e) {
       throw new AvroBaseException("Failed to open index", e);
     }
@@ -44,7 +40,7 @@ public class HSAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
   @Override
   public Row<T, K> get(byte[] row) throws AvroBaseException {
     try {
-      ResultSet rs = primary.find(new String[]{new String(row)});
+      ResultSet rs = session.find(new String[]{new String(row)});
       if (rs.next()) {
         int schema_id = rs.getInt(1);
         long version = rs.getLong(2);

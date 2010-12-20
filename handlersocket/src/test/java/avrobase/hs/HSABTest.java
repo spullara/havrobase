@@ -80,12 +80,13 @@ public class HSABTest {
         Executors.newCachedThreadPool(),
         ds,
         hsb.build(),
+        "hstest",
         "user",
         "profile",
         "avro_schemas",
         User.SCHEMA$,
         AvroFormat.JSON,
-        new BytesKeyStrategy(new SecureRandom(), 128), "hstest"
+        new BytesKeyStrategy(new SecureRandom(), 128)
     );
   }
 
