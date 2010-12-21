@@ -1,4 +1,4 @@
-package avrobase.handlersocket;
+package avrobase.hs;
 
 import avrobase.AvroBaseException;
 import avrobase.AvroFormat;
@@ -27,10 +27,12 @@ public class HSAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
   private IndexSession session;
 
   @Inject
-  public HSAB(ExecutorService es, DataSource datasource, HSClient hsClient, String database, String table, String family,
+  public HSAB(ExecutorService es, DataSource datasource, HSClient hsClient, String table, String family,
               String schemaTable, Schema schema, AvroFormat storageFormat, KeyStrategy<K> keytx) throws AvroBaseException {
     super(es, datasource, table, family, schemaTable, schema, storageFormat, keytx);
     try {
+      String url = datasource.getConnection().getMetaData().getURL();
+      String database = url.substring(url.lastIndexOf("/") + 1);
       session = hsClient.openIndexSession(database, mysqlTableName, "PRIMARY", new String[]{"schema_id", "version", "format", "avro"});
     } catch (Exception e) {
       throw new AvroBaseException("Failed to open index", e);
