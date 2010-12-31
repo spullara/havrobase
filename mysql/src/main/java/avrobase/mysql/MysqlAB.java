@@ -44,8 +44,8 @@ import java.util.concurrent.TimeoutException;
 public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   private final ExecutorService es;
   protected final DataSource datasource;
-  private final AvroFormat storageFormat;
-  private final String schemaTable;
+  protected final AvroFormat storageFormat;
+  protected final String schemaTable;
   protected final String mysqlTableName;
   protected final KeyStrategy<K> keytx;
 
@@ -343,7 +343,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
     }.query();
   }
 
-  private synchronized Schema getSchema(final int schema_id) throws AvroBaseException {
+  protected synchronized Schema getSchema(final int schema_id) throws AvroBaseException {
     Schema schema = abbrevSchema.get(schema_id);
     if (schema == null) {
       schema = new Query<Schema>(datasource, "SELECT id, hash, json FROM " + schemaTable + " WHERE id=?") {
