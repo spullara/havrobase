@@ -14,6 +14,7 @@
     <module>redis</module>
     <module>sharded</module>
     <module>file</module>
+    <module>handlersocket</module>
   </modules>
   <packaging>pom</packaging>
 
