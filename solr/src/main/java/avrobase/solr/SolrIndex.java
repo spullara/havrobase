@@ -126,7 +126,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
         solrServer.request(req);
         lastCommit = current;
       } catch (Exception e) {
-        throw new AvroBaseException("Solr commit failed", e);
+        // Ignore failed commit and continue
       }
     }
 
