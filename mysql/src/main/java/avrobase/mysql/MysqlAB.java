@@ -32,6 +32,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Mysql backed implementation of Avrobase.
@@ -55,14 +56,14 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
   @Inject
   public MysqlAB(
-      ExecutorService es,
-      DataSource datasource,
-      String table,
-      String family,
-      String schemaTable,
-      Schema schema,
-      AvroFormat storageFormat,
-      KeyStrategy<K> keytx) throws AvroBaseException {
+          ExecutorService es,
+          DataSource datasource,
+          String table,
+          String family,
+          String schemaTable,
+          Schema schema,
+          AvroFormat storageFormat,
+          KeyStrategy<K> keytx) throws AvroBaseException {
 
     super(schema, storageFormat);
     this.es = es;
@@ -384,7 +385,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
     }
     final Integer finalSchemaId = schemaId;
     int updated = new Update(datasource, "INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?,1,?,?) " +
-        "ON DUPLICATE KEY UPDATE schema_id=values(schema_id), version = version + 1, format=values(format), avro=values(avro)") {
+            "ON DUPLICATE KEY UPDATE schema_id=values(schema_id), version = version + 1, format=values(format), avro=values(avro)") {
       public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
         ps.setBytes(1, row);
         ps.setInt(2, finalSchemaId);
@@ -407,7 +408,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
     if (version == 0) {
       try {
         int updated = new Update(datasource, "INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?," +
-            "1,?,?)") {
+                "1,?,?)") {
           public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
             ps.setBytes(1, row);
             ps.setInt(2, finalSchemaId);
@@ -440,79 +441,85 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   }
 
   public Iterable<Row<T, K>> scan(final byte[] startRow, final byte[] stopRow) throws AvroBaseException {
-    final StringBuilder statement = new StringBuilder("SELECT row, schema_id, version, format, avro FROM ");
-    statement.append(mysqlTableName);
-    if (startRow != null) {
-      statement.append(" WHERE row >= ?");
-    }
-    if (stopRow != null) {
-      if (startRow == null) {
-        statement.append(" WHERE row < ?");
-      } else {
-        statement.append(" AND row < ?");
-      }
-    }
-    statement.append(" ORDER BY row ASC");
-    final boolean[] done = new boolean[1];
+    final AtomicBoolean done = new AtomicBoolean(false);
     final Queue<Row<T, K>> queue = new ConcurrentLinkedQueue<Row<T, K>>() {
       @Override
       public synchronized boolean isEmpty() {
-        return super.isEmpty() && done[0];
+        return super.isEmpty() && done.get();
       }
     };
-    final Future<Void> submit = es.submit(new Callable<Void>() {
-      public Void call() throws Exception {
-        new Query<Iterable<Row<T, K>>>(datasource, statement.toString()) {
-          public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
-            int i = 1;
-            if (startRow != null) {
-              ps.setBytes(i++, startRow);
-            }
-            if (stopRow != null) {
-              ps.setBytes(i, stopRow);
-            }
-          }
-
-          public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
-            while (rs.next()) {
-              byte[] row = rs.getBytes(1);
-              int schema_id = rs.getInt(2);
-              long version = rs.getLong(3);
-              AvroFormat format = AvroFormat.values()[rs.getByte(4)];
-              byte[] avro = rs.getBytes(5);
-              Schema schema = getSchema(schema_id);
-              if (schema != null) {
-                queue.add(new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version));
-                synchronized (queue) {
-                  queue.notify();
-                }
-              } else {
-                // TODO: logging
-                System.err.println("skipped row because of missing schema: " + keytx.fromBytes(row) + " schema " + schema_id);
-              }
-            }
-            synchronized (queue) {
-              done[0] = true;
-              queue.notify();
-            }
-            return null;
-          }
-        }.query();
-        return null;
-      }
-    });
 
     return new Iterable<Row<T, K>>() {
 
       @Override
       public Iterator<Row<T, K>> iterator() {
         return new Iterator<Row<T, K>>() {
-          protected Row<T, K> tkRow;
+          // Current iterator entry
+          Row<T, K> tkRow;
+
+          // Remember state of the cursor
+          boolean skip = false;
+          byte[] start = startRow;
+          byte[] stop = stopRow;
+
+          Future<Void> submit = getSubmit();
+
+          Future<Void> getSubmit() {
+            return es.submit(new Callable<Void>() {
+              public Void call() throws Exception {
+                new Query<Iterable<Row<T, K>>>(datasource, getStatement(start, stop, skip)) {
+                  public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+                    int i = 1;
+                    if (start != null) {
+                      ps.setBytes(i++, start);
+                    }
+                    if (stop != null) {
+                      ps.setBytes(i, stop);
+                    }
+                  }
+
+                  public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
+                    while (rs.next()) {
+                      byte[] row = rs.getBytes(1);
+                      int schema_id = rs.getInt(2);
+                      long version = rs.getLong(3);
+                      AvroFormat format = AvroFormat.values()[rs.getByte(4)];
+                      byte[] avro = rs.getBytes(5);
+                      Schema schema = getSchema(schema_id);
+                      if (schema != null) {
+                        queue.add(new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version));
+                        synchronized (queue) {
+                          queue.notify();
+                          skip = true;
+                          start = row;
+                          if (queue.size() > 1000) {
+                            return null;
+                          }
+                        }
+                        Thread.yield();
+                      } else {
+                        // TODO: logging
+                        System.err.println("skipped row because of missing schema: " + keytx.fromBytes(row) + " schema " + schema_id);
+                      }
+                    }
+                    synchronized (queue) {
+                      done.set(true);
+                      queue.notify();
+                    }
+                    return null;
+                  }
+                }.query();
+                return null;
+              }
+            });
+          }
 
           @Override
           public boolean hasNext() {
             try {
-              submit.get(0, TimeUnit.SECONDS);
+              if (submit.get(0, TimeUnit.SECONDS) == null && !done.get() && queue.size() < 100) {
+                submit = getSubmit();
+              }
             } catch (InterruptedException e) {
               // ignore
             } catch (ExecutionException e) {
@@ -528,6 +535,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
                   // interrupted
                 }
               }
+              queue.notify();
             }
             return tkRow != null;
           }
@@ -557,5 +565,22 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
         };
       }
     };
+  }
+
+  private String getStatement(byte[] startRow, byte[] stopRow, boolean skip) {
+    final StringBuilder statement = new StringBuilder("SELECT row, schema_id, version, format, avro FROM ");
+    statement.append(mysqlTableName);
+    if (startRow != null) {
+      statement.append(" WHERE row >").append(skip ? "" : "=").append(" ?");
+    }
+    if (stopRow != null) {
+      if (startRow == null) {
+        statement.append(" WHERE row < ?");
+      } else {
+        statement.append(" AND row < ?");
+      }
+    }
+    statement.append(" ORDER BY row ASC");
+    return statement.toString();
   }
 }
