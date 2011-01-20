@@ -10,6 +10,7 @@ import org.apache.avro.specific.SpecificRecord;
 import org.apache.commons.codec.binary.Hex;
 
 import javax.sql.DataSource;
+import java.awt.geom.AffineTransform;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
@@ -33,6 +34,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Mysql backed implementation of Avrobase.
@@ -43,6 +45,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * TODO: consider column-type-specific support (via keytx)
  */
 public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
+  private static final int MAX_BUFFER_SIZE = 4096;
   private final ExecutorService es;
   protected final DataSource datasource;
   protected final AvroFormat storageFormat;
@@ -440,6 +443,20 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
     return true;
   }
 
+  /**
+   * Scanning is pretty complicated when you have server-side cursors and client-side filtering. A client may
+   * ask for a lot of data and only look at the first bit of it and we need to be able to release resources
+   * in the case where the client is no longer interested. We do this by noticing that we are buffering ahead of
+   * client consumption and remembering where we are in the range so that when the client catches up they can
+   * come right back into their range scan. We do an exponential increase in buffer size as we see the client
+   * continuing to eventually consume the data.
+   *
+   * @param startRow
+   * @param stopRow
+   * @return
+   * @throws AvroBaseException
+   */
+
   public Iterable<Row<T, K>> scan(final byte[] startRow, final byte[] stopRow) throws AvroBaseException {
     final AtomicBoolean done = new AtomicBoolean(false);
     final Queue<Row<T, K>> queue = new ConcurrentLinkedQueue<Row<T, K>>() {
@@ -453,6 +470,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
       @Override
       public Iterator<Row<T, K>> iterator() {
+        final AtomicInteger ai = new AtomicInteger(16);
         return new Iterator<Row<T, K>>() {
           // Current iterator entry
           Row<T, K> tkRow;
@@ -492,7 +510,11 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
                           queue.notify();
                           skip = true;
                           start = row;
-                          if (queue.size() > 1000) {
+                          int buffer = ai.get();
+                          if (queue.size() > buffer) {
+                            if (buffer < MAX_BUFFER_SIZE) {
+                              ai.set(buffer * 2);
+                            }
                             return null;
                           }
                         }
@@ -517,7 +539,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
           @Override
           public boolean hasNext() {
             try {
-              if (submit.get(0, TimeUnit.SECONDS) == null && !done.get() && queue.size() < 100) {
+              if (submit.get(0, TimeUnit.SECONDS) == null && !done.get() && queue.size() == 0) {
                 submit = getSubmit();
               }
             } catch (InterruptedException e) {
