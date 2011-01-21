@@ -505,8 +505,9 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
                       byte[] avro = rs.getBytes(5);
                       Schema schema = getSchema(schema_id);
                       if (schema != null) {
-                        queue.add(new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version));
+                        Row<T, K> newrow = new Row<T, K>(readValue(avro, schema, format), keytx.fromBytes(row), version);
                         synchronized (queue) {
+                          queue.add(newrow);
                           queue.notify();
                           skip = true;
                           start = row;
@@ -552,7 +553,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
             synchronized (queue) {
               while (tkRow == null && (tkRow = queue.poll()) == null && !queue.isEmpty()) {
                 try {
-                  queue.wait();
+                  queue.wait(1000);
                 } catch (InterruptedException e) {
                   // interrupted
                 }
