@@ -540,18 +540,18 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
           @Override
           public boolean hasNext() {
             synchronized (queue) {
-              try {
-                if (submit.get(0, TimeUnit.SECONDS) == null && !done.get() && queue.size() == 0) {
-                  submit = getSubmit();
-                }
-              } catch (InterruptedException e) {
-                // ignore
-              } catch (ExecutionException e) {
-                throw new AvroBaseException(e);
-              } catch (TimeoutException e) {
-                // ignore, not done yet
-              }
               while (tkRow == null && (tkRow = queue.poll()) == null && !queue.isEmpty()) {
+                try {
+                  if (submit.get(0, TimeUnit.SECONDS) == null && !done.get() && queue.size() == 0) {
+                    submit = getSubmit();
+                  }
+                } catch (InterruptedException e) {
+                  // ignore
+                } catch (ExecutionException e) {
+                  throw new AvroBaseException(e);
+                } catch (TimeoutException e) {
+                  // ignore, not done yet
+                }
                 try {
                   queue.wait(1000);
                 } catch (InterruptedException e) {
@@ -565,15 +565,6 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
           @Override
           public Row<T, K> next() {
-            try {
-              submit.get(0, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-              // ignore
-            } catch (ExecutionException e) {
-              throw new AvroBaseException(e);
-            } catch (TimeoutException e) {
-              // ignore, not done yet
-            }
             if (hasNext() && tkRow != null) {
               Row<T, K> tmp = tkRow;
               tkRow = null;
