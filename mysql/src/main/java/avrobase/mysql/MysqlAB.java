@@ -539,18 +539,18 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
           @Override
           public boolean hasNext() {
-            try {
-              if (submit.get(0, TimeUnit.SECONDS) == null && !done.get() && queue.size() == 0) {
-                submit = getSubmit();
-              }
-            } catch (InterruptedException e) {
-              // ignore
-            } catch (ExecutionException e) {
-              throw new AvroBaseException(e);
-            } catch (TimeoutException e) {
-              // ignore, not done yet
-            }
             synchronized (queue) {
+              try {
+                if (submit.get(0, TimeUnit.SECONDS) == null && !done.get() && queue.size() == 0) {
+                  submit = getSubmit();
+                }
+              } catch (InterruptedException e) {
+                // ignore
+              } catch (ExecutionException e) {
+                throw new AvroBaseException(e);
+              } catch (TimeoutException e) {
+                // ignore, not done yet
+              }
               while (tkRow == null && (tkRow = queue.poll()) == null && !queue.isEmpty()) {
                 try {
                   queue.wait(1000);
