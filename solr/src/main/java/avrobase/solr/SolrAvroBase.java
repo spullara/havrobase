@@ -14,6 +14,10 @@ import org.apache.avro.specific.SpecificRecord;
  * Time: 11:54:18 AM
  */
 public class SolrAvroBase<T extends SpecificRecord, K> extends IndexedAvroBase<T, K, SQ> {
+  public SolrAvroBase(final AvroBase<T, K> avroBase, SolrIndex<T, K> tkSolrIndex) {
+    super(avroBase, tkSolrIndex);
+  }
+
   public SolrAvroBase(final AvroBase<T, K> avroBase, String url, ReversableFunction<K, String> keyTx) {
     super(avroBase, new SolrIndex<T, K>(url, keyTx));
   }

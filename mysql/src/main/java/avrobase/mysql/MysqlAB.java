@@ -8,6 +8,8 @@ import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.commons.codec.binary.Hex;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.awt.geom.AffineTransform;
@@ -52,6 +54,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   protected final String schemaTable;
   protected final String mysqlTableName;
   protected final KeyStrategy<K> keytx;
+  protected final Logger logger = LoggerFactory.getLogger("MysqlAB");
 
   // Caches
   private Map<Integer, Schema> abbrevSchema = new ConcurrentHashMap<Integer, Schema>();
@@ -522,7 +525,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
                         Thread.yield();
                       } else {
                         // TODO: logging
-                        System.err.println("skipped row because of missing schema: " + keytx.fromBytes(row) + " schema " + schema_id);
+                        logger.error("skipped row because of missing schema: " + keytx.fromBytes(row) + " schema " + schema_id);
                       }
                     }
                     synchronized (queue) {
