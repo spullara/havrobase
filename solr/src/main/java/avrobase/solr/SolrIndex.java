@@ -21,6 +21,8 @@ import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -54,6 +56,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
   private volatile long lastCommit = System.currentTimeMillis();
   private volatile long lastOptimize = System.currentTimeMillis();
   private static Timer commitTimer = new Timer();
+  private static Logger logger = LoggerFactory.getLogger("SolrIndex");
 
   public SolrIndex(String solrURL, ReversableFunction<K, String> keyTx) {
     this.keyTx = keyTx;
@@ -234,7 +237,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
               try {
                 solrServer.request(req);
               } catch (Exception e) {
-                e.printStackTrace();
+                logger.error("Failed to commit", e);
               }
             }
           }
