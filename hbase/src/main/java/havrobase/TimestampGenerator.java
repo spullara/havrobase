@@ -21,7 +21,11 @@ public class TimestampGenerator {
    * @return
    */
   public long getInvertedTimestamp() {
-    return Long.MAX_VALUE - getTimestamp();
+    return getInvertedTimestamp(getTimestamp());
+  }
+
+  public long getInvertedTimestamp(long timestamp) {
+    return Long.MAX_VALUE - timestamp;
   }
 
   /**
