@@ -51,6 +51,11 @@
       "name":"password",
       "type":"bytes",
       "default": ""
+    },
+    {
+      "name":"mobile",
+      "type":["null", "string"],
+      "default":null
     }
   ]
 }

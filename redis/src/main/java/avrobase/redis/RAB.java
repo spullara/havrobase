@@ -23,6 +23,7 @@ import java.util.concurrent.TimeoutException;
  * Date: Oct 3, 2010
  * Time: 11:32:10 AM
  */
+@SuppressWarnings({"unchecked"})
 public class RAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
 
   private JedisPool pool;

@@ -2,16 +2,16 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>havrobase</groupId>
+    <groupId>com.github.spullara.avrobase</groupId>
     <artifactId>all</artifactId>
-    <version>0.1.4-SNAPSHOT</version>
+    <version>${avrobase.version}</version>
   </parent>
 
   <artifactId>base</artifactId>
   <packaging>jar</packaging>
 
   <name>Base</name>
-  <url>http://maven.apache.org</url>
+  <url>http://github.com/spullara/havrobase</url>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -20,29 +20,15 @@
   <dependencies>
     <!-- Avro -->
     <dependency>
-      <groupId>org.apache.hadoop</groupId>
+      <groupId>org.apache.avro</groupId>
       <artifactId>avro</artifactId>
-      <version>1.3.2</version>
+      <version>1.5.0</version>
       <scope>compile</scope>
-      <exclusions>
-        <exclusion>
-          <groupId>org.mortbay.jetty</groupId>
-          <artifactId>jetty</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.codehaus.jackson</groupId>
-          <artifactId>jackson-mapper-asl</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-api</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.codehaus.jackson</groupId>
       <artifactId>jackson-mapper-asl</artifactId>
-      <version>1.5.2</version>
+      <version>1.5.4</version>
     </dependency>
 
     <!-- Hex -->
@@ -70,7 +56,7 @@
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
-      <version>r07</version>
+      <version>r09</version>
     </dependency>
 
     <!-- Test -->

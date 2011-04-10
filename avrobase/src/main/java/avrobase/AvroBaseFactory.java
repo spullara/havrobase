@@ -13,6 +13,7 @@ import org.apache.avro.specific.SpecificRecord;
  * Date: Jun 9, 2010
  * Time: 11:51:40 AM
  */
+@SuppressWarnings({"unchecked"})
 public class AvroBaseFactory {
   public static <T extends SpecificRecord, K, Q> AvroBase<T, K> createAvroBase(Module module, Class<? extends AvroBase> clazz, final AvroFormat format) throws AvroBaseException {
     Injector injector = Guice.createInjector(module);

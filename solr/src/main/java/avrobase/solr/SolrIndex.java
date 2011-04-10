@@ -9,7 +9,6 @@ import com.google.common.collect.Iterables;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericArray;
 import org.apache.avro.specific.SpecificRecord;
-import org.apache.commons.lang.NotImplementedException;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrRequest;
 import org.apache.solr.client.solrj.SolrServer;
@@ -164,7 +163,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
 
             @Override
             public void remove() {
-              throw new NotImplementedException();
+              throw new Error("Not implemented");
             }
           };
         }

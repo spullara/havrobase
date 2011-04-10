@@ -6,6 +6,7 @@ import junit.framework.TestCase;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.apache.avro.util.Utf8;
@@ -40,7 +41,8 @@ public class UserTest extends TestCase {
       saved.location = $("Los Altos, CA");
       saved.password = ByteBuffer.wrap($("").getBytes());
       FileOutputStream fos = new FileOutputStream(file);
-      BinaryEncoder be = new BinaryEncoder(fos);
+
+      BinaryEncoder be = new EncoderFactory().binaryEncoder(fos, null);
       SpecificDatumWriter<User> sdw = new SpecificDatumWriter<User>(User.class);
       sdw.write(saved, be);
       be.flush();
@@ -49,7 +51,7 @@ public class UserTest extends TestCase {
     {
       FileInputStream fis = new FileInputStream(file);
       DecoderFactory factory = new DecoderFactory();
-      BinaryDecoder bd = factory.createBinaryDecoder(fis, null);
+      BinaryDecoder bd = factory.binaryDecoder(fis, null);
       SpecificDatumReader<User> sdr = new SpecificDatumReader<User>(User.class);
       User loaded = sdr.read(null, bd);
       fis.close();
@@ -73,7 +75,7 @@ public class UserTest extends TestCase {
 //      saved.location = $("Los Altos, CA");
       saved.password = ByteBuffer.wrap($("").getBytes());
       FileOutputStream fos = new FileOutputStream(file);
-      BinaryEncoder be = new BinaryEncoder(fos);
+      BinaryEncoder be = new EncoderFactory().binaryEncoder(fos, null);
       SpecificDatumWriter<User> sdw = new SpecificDatumWriter<User>(User.class);
       sdw.write(saved, be);
       be.flush();
@@ -82,7 +84,7 @@ public class UserTest extends TestCase {
     {
       FileInputStream fis = new FileInputStream(file);
       DecoderFactory factory = new DecoderFactory();
-      BinaryDecoder bd = factory.createBinaryDecoder(fis, null);
+      BinaryDecoder bd = factory.binaryDecoder(fis, null);
       SpecificDatumReader<User> sdr = new SpecificDatumReader<User>(User.class);
       User loaded = sdr.read(null, bd);
       fis.close();

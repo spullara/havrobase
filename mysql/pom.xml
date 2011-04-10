@@ -3,12 +3,11 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>havrobase</groupId>
+    <groupId>com.github.spullara.avrobase</groupId>
     <artifactId>all</artifactId>
-    <version>0.1.4-SNAPSHOT</version>
+    <version>${avrobase.version}</version>
   </parent>
 
-  <groupId>havrobase</groupId>
   <artifactId>mysql</artifactId>
   <packaging>jar</packaging>
 
@@ -30,7 +29,7 @@
     <dependency>
       <groupId>mysql</groupId>
       <artifactId>mysql-connector-java</artifactId>
-      <version>5.1.10</version>
+      <version>5.1.13</version>
     </dependency>
 
     <!-- Hex -->
@@ -42,9 +41,9 @@
 
 
     <dependency>
-      <groupId>havrobase</groupId>
+      <groupId>com.github.spullara.avrobase</groupId>
       <artifactId>base</artifactId>
-      <version>0.1.4-SNAPSHOT</version>
+      <version>${avrobase.version}</version>
     </dependency>
 
     <!-- Test -->

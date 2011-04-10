@@ -14,11 +14,13 @@ import com.google.inject.Provider;
 import com.google.inject.TypeLiteral;
 import com.google.inject.name.Names;
 import org.apache.avro.Schema;
+import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.util.Utf8;
 import org.apache.hadoop.hbase.HBaseConfiguration;
 import org.apache.hadoop.hbase.MasterNotRunningException;
+import org.apache.hadoop.hbase.ZooKeeperConnectionException;
 import org.apache.hadoop.hbase.client.Delete;
 import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.HBaseAdmin;
@@ -83,6 +85,8 @@ public class HABTest {
       try {
         admin = new HBaseAdmin(HBaseConfiguration.create());
       } catch (MasterNotRunningException e) {
+        throw new RuntimeException(e);
+      } catch (ZooKeeperConnectionException e) {
         throw new RuntimeException(e);
       }
     }
@@ -325,10 +329,11 @@ public class HABTest {
       } finally {
         pool.putTable(schemaTable);
       }
-      JsonDecoder jd = new JsonDecoder(actual, Bytes.toString(userRow.getValue(COLUMN_FAMILY, Bytes.toBytes("d"))));
+      DecoderFactory decoderFactory = new DecoderFactory();
+      JsonDecoder jd = decoderFactory.jsonDecoder(actual, Bytes.toString(userRow.getValue(COLUMN_FAMILY, Bytes.toBytes("d"))));
 
       // Read it as a slightly different schema lacking a field
-      InputStream stream = getClass().getResourceAsStream("/User2.json");
+      InputStream stream = getClass().getResourceAsStream("/src/test/avro/User2.avsc");
       Schema expected = Schema.parse(stream);
 
       {

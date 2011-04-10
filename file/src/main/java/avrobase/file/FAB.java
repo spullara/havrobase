@@ -14,10 +14,8 @@ import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
-import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
-import org.apache.commons.lang.NotImplementedException;
 
 import javax.annotation.Nullable;
 import java.io.BufferedInputStream;
@@ -155,15 +153,15 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> imple
           hashCache.put(schema, hash);
         }
         try {
+          DecoderFactory decoderFactory = new DecoderFactory();
           Decoder d;
           switch (format) {
             case JSON:
-              d = new JsonDecoder(schema, is);
+              d = decoderFactory.jsonDecoder(schema, is);
               break;
             case BINARY:
             default:
-              DecoderFactory factory = new DecoderFactory();
-              d = factory.createBinaryDecoder(is, null);
+              d = decoderFactory.binaryDecoder(is, null);
               break;
           }
           // Read the data
@@ -314,22 +312,22 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> imple
 
   @Override
   public void delete(String row) throws AvroBaseException {
-    throw new NotImplementedException();
+    throw new Error("Not implemented");
   }
 
   @Override
   public Iterable<Row<T, String>> scan(String startRow, String stopRow) throws AvroBaseException {
-    throw new NotImplementedException();
+    throw new Error("Not implemented");
   }
 
   @Override
   public Row<T, String> mutate(String row, Mutator<T> tMutator) throws AvroBaseException {
-    throw new NotImplementedException();
+    throw new Error("Not implemented");
   }
 
   @Override
   public Row<T, String> mutate(String row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
-    throw new NotImplementedException();
+    throw new Error("Not implemented");
   }
 
   static final byte[] HEX_CHAR_TABLE = {

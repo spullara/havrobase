@@ -2,9 +2,9 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <parent>
-    <groupId>havrobase</groupId>
+    <groupId>com.github.spullara.avrobase</groupId>
     <artifactId>all</artifactId>
-    <version>0.1.4-SNAPSHOT</version>
+    <version>${avrobase.version}</version>
   </parent>
   <artifactId>hbase</artifactId>
   <packaging>jar</packaging>
@@ -26,16 +26,16 @@
   <dependencies>
     <!-- Module -->
     <dependency>
-      <groupId>havrobase</groupId>
+      <groupId>com.github.spullara.avrobase</groupId>
       <artifactId>solr</artifactId>
-      <version>0.1.4-SNAPSHOT</version>
+      <version>${avrobase.version}</version>
     </dependency>
 
     <!-- HBase -->
     <dependency>
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase</artifactId>
-      <version>0.89.0-20100828.154136-20</version>
+      <version>0.90.0</version>
       <exclusions>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>
@@ -180,36 +180,12 @@
       <plugin>
         <groupId>org.apache.avro</groupId>
         <artifactId>avro-maven-plugin</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>${avroplugin.version}</version>
         <executions>
           <execution>
             <phase>generate-sources</phase>
-            <configuration>
-              <sourceDirectory>src/test/avro</sourceDirectory>
-              <includes>
-                <include>**/*.json</include>
-              </includes>
-              <schemaExtension>.json</schemaExtension>
-            </configuration>
             <goals>
-              <goal>compile</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>com.thoughtworks.paranamer</groupId>
-        <artifactId>paranamer-maven-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>run</id>
-            <!-- id is optional -->
-            <configuration>
-              <sourceDirectory>${project.build.directory}/generated-sources/avro</sourceDirectory>
-              <outputDirectory>${project.build.directory}/classes</outputDirectory>
-            </configuration>
-            <goals>
-              <goal>generate</goal>
+              <goal>schema</goal>
             </goals>
           </execution>
         </executions>

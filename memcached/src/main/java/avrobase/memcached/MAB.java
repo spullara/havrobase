@@ -10,7 +10,6 @@ import com.google.inject.name.Named;
 import com.schooner.MemCached.MemcachedItem;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
-import org.apache.commons.lang.NotImplementedException;
 
 /**
  * Memcached implementation used for caching only. No queries.
@@ -55,7 +54,7 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
 
   @Override
   public String create(T value) throws AvroBaseException {
-    throw new NotImplementedException();
+    throw new Error("Not implemented");
   }
 
   @Override
@@ -96,6 +95,6 @@ public class MAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
 
   @Override
   public Iterable<Row<T, String>> scan(String startRow, String stopRow) throws AvroBaseException {
-    throw new NotImplementedException();
+    throw new Error("Not implemented");
   }
 }

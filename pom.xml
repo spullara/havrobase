@@ -2,9 +2,14 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <groupId>havrobase</groupId>
+  <properties>
+    <avrobase.version>0.2-SNAPSHOT</avrobase.version>
+    <avroplugin.version>1.5.0</avroplugin.version>
+  </properties>
+
+  <groupId>com.github.spullara.avrobase</groupId>
   <artifactId>all</artifactId>
-  <version>0.1.4-SNAPSHOT</version>
+  <version>${avrobase.version}</version>
   <modules>
     <module>avrobase</module>
     <module>solr</module>
@@ -18,17 +23,13 @@
   </modules>
   <packaging>pom</packaging>
 
-  <name>HAvroBase</name>
-  <url>http://maven.apache.org</url>
+  <name>AvroBase</name>
+  <url>http://github.com/spullara/havrobase</url>
 
   <repositories>
     <repository>
-      <id>javarants releases</id>
-      <url>http://www.javarants.com/repository/</url>
-    </repository>
-    <repository>
       <id>javarants snapshots</id>
-      <url>http://www.javarants.com/snapshots/</url>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
     </repository>
   </repositories>
 
@@ -38,12 +39,12 @@
       <url>scp://www.javarants.com/opt/sites/javarants/sites/</url>
     </site>
     <repository>
-      <id>www.javarants.com</id>
-      <url>scp://www.javarants.com/opt/sites/javarants/repository/</url>
+      <id>sonatype-nexus-staging</id>
+      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
     </repository>
     <snapshotRepository>
-      <id>www.javarants.com</id>
-      <url>scp://www.javarants.com/opt/sites/javarants/snapshots/</url>
+      <id>sonatype-nexus-snapshots</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
     </snapshotRepository>
   </distributionManagement>
 
@@ -60,7 +61,7 @@
       <dependency>
         <groupId>junit</groupId>
         <artifactId>junit</artifactId>
-        <version>4.8.1</version>
+        <version>4.8.2</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

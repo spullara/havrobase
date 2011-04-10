@@ -9,7 +9,6 @@ import com.google.common.collect.Iterables;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.commons.codec.binary.Hex;
-import org.apache.commons.lang.NotImplementedException;
 
 import javax.annotation.Nullable;
 import javax.sql.DataSource;
@@ -393,8 +392,7 @@ public class IndexedMysqlAB<T extends SpecificRecord> extends AvroBaseImpl<T, Lo
 
   @Override
   public void delete(Long row) throws AvroBaseException {
-    //TODO:1
-    throw new NotImplementedException();
+    throw new Error("Not implemented");
   }
 
   @Override

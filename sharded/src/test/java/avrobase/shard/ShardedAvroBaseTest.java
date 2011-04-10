@@ -39,9 +39,9 @@ import static junit.framework.Assert.assertEquals;
  * Date: 10/10/10
  * Time: 11:03 AM
  */
+@SuppressWarnings({"unchecked"})
 public class ShardedAvroBaseTest {
   private static Random random = new SecureRandom();
-  private static String MYSQL_SCHEMAS = "avro_schemas";
   private static final KeyStrategy<String> KEYTX = new KeyStrategy<String>() {
 
     @Override
@@ -100,6 +100,7 @@ public class ShardedAvroBaseTest {
     BoneCPDataSource ds = new BoneCPDataSource(config);
     ExecutorService es = Executors.newCachedThreadPool();
 
+    String MYSQL_SCHEMAS = "avro_schemas";
     mab1 = new ShardableMysqlAB(es, ds, "user", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
     mab2 = new ShardableMysqlAB(es, ds, "user2", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
     mab3 = new ShardableMysqlAB(es, ds, "user3", "profile", MYSQL_SCHEMAS, User.SCHEMA$, AvroFormat.JSON, KEYTX);
@@ -255,7 +256,6 @@ public class ShardedAvroBaseTest {
 
   @AfterClass
   public static void teardown() {
-    //noinspection unchecked
     for (AvroBase<User, String> ab : AVRO_BASES) {
       for (Row<User, String> userRow : ab.scan(null, null)) {
         ab.delete(userRow.row);

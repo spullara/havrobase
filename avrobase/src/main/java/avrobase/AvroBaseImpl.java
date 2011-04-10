@@ -6,6 +6,7 @@ import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.io.JsonDecoder;
 import org.apache.avro.io.JsonEncoder;
 import org.apache.avro.specific.SpecificDatumReader;
@@ -100,6 +101,8 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
     return schema;
   }
 
+  private static EncoderFactory encoderFactory = new EncoderFactory();
+
   /**
    * Serialize the Avro instance using its schema and the
    * format set for this avrobase
@@ -114,11 +117,12 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
       Encoder be;
       switch (format) {
         case JSON:
-          be = new JsonEncoder(schema, baos);
+          be = encoderFactory.jsonEncoder(schema, baos);
           break;
         case BINARY:
         default:
-          be = new BinaryEncoder(baos);
+          // TODO: cache binary encoders?
+          be = encoderFactory.binaryEncoder(baos, null);
           break;
       }
       SpecificDatumWriter<T> sdw = new SpecificDatumWriter<T>(schema);
@@ -164,6 +168,8 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
     return readValue(data, schema, format, 0, data.length);
   }
 
+  private static DecoderFactory decoderFactory = new DecoderFactory();
+
   /**
    * Read the avro serialized data using the specified schema and format
    * in the hbase row
@@ -172,15 +178,13 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
   readValue(byte[] data, Schema schema, AvroFormat format, int offset, int length) throws AvroBaseException {
     try {
       Decoder d;
-      ByteArrayInputStream in = new ByteArrayInputStream(data, offset, length);
       switch (format) {
         case JSON:
-          d = new JsonDecoder(schema, in);
+          d = decoderFactory.jsonDecoder(schema, new String(data, UTF8));
           break;
         case BINARY:
         default:
-          DecoderFactory factory = new DecoderFactory();
-          d = factory.createBinaryDecoder(in, null);
+          d = decoderFactory.binaryDecoder(data, null);
           break;
       }
       SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(actualSchema);
