@@ -360,7 +360,6 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
         public Schema execute(ResultSet rs) throws AvroBaseException, SQLException {
           if (rs.next()) {
-            String hash = new String(rs.getBytes(2));
             return loadSchema(schema_id, rs.getBytes(3));
           } else {
             return null;

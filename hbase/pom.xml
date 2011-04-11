@@ -4,7 +4,7 @@
   <parent>
     <groupId>com.github.spullara.avrobase</groupId>
     <artifactId>all</artifactId>
-    <version>${avrobase.version}</version>
+    <version>0.2-SNAPSHOT</version>
   </parent>
   <artifactId>hbase</artifactId>
   <packaging>jar</packaging>
@@ -28,7 +28,7 @@
     <dependency>
       <groupId>com.github.spullara.avrobase</groupId>
       <artifactId>solr</artifactId>
-      <version>${avrobase.version}</version>
+      <version>0.2-SNAPSHOT</version>
     </dependency>
 
     <!-- HBase -->
@@ -37,6 +37,10 @@
       <artifactId>hbase</artifactId>
       <version>0.90.0</version>
       <exclusions>
+        <exclusion>
+          <groupId>org.apache.hadoop</groupId>
+          <artifactId>avro</artifactId>
+        </exclusion>
         <exclusion>
           <groupId>org.mortbay.jetty</groupId>
           <artifactId>jetty</artifactId>

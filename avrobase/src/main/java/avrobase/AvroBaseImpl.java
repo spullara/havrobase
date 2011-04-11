@@ -184,11 +184,10 @@ public abstract class AvroBaseImpl<T extends SpecificRecord, K> implements AvroB
           break;
         case BINARY:
         default:
-          d = decoderFactory.binaryDecoder(data, null);
+          d = decoderFactory.binaryDecoder(data, offset, length, null);
           break;
       }
-      SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(actualSchema);
-      sdr.setExpected(schema);
+      SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(schema, actualSchema);
       return sdr.read(null, d);
     } catch (IOException e) {
       throw new AvroBaseException("Failed to read value: " + schema, e);

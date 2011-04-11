@@ -9,7 +9,7 @@
 
   <groupId>com.github.spullara.avrobase</groupId>
   <artifactId>all</artifactId>
-  <version>${avrobase.version}</version>
+  <version>0.2-SNAPSHOT</version>
   <modules>
     <module>avrobase</module>
     <module>solr</module>
@@ -38,14 +38,6 @@
       <id>www.javarants.com</id>
       <url>scp://www.javarants.com/opt/sites/javarants/sites/</url>
     </site>
-    <repository>
-      <id>sonatype-nexus-staging</id>
-      <url>https://oss.sonatype.org/service/local/staging/deploy/maven2</url>
-    </repository>
-    <snapshotRepository>
-      <id>sonatype-nexus-snapshots</id>
-      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
-    </snapshotRepository>
   </distributionManagement>
 
   <dependencies>

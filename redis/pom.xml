@@ -3,7 +3,7 @@
   <parent>
     <groupId>com.github.spullara.avrobase</groupId>
     <artifactId>all</artifactId>
-    <version>${avrobase.version}</version>
+    <version>0.2-SNAPSHOT</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
 
@@ -22,7 +22,7 @@
     <dependency>
       <groupId>com.github.spullara.avrobase</groupId>
       <artifactId>base</artifactId>
-      <version>${avrobase.version}</version>
+      <version>0.2-SNAPSHOT</version>
     </dependency>
 
     <!-- Jedis -->
