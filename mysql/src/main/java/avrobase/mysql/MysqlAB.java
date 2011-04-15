@@ -48,7 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   private static final int MAX_BUFFER_SIZE = 4096;
-  private final ExecutorService es;
+  protected final ExecutorService es;
   protected final DataSource datasource;
   protected final AvroFormat storageFormat;
   protected final String schemaTable;
@@ -389,13 +389,15 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
       schemaId = storeSchema(schema);
     }
     final Integer finalSchemaId = schemaId;
+    final byte[] serialize = serialize(value);
+    final int format = storageFormat.ordinal();
     int updated = new Update(datasource, "INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?,1,?,?) " +
             "ON DUPLICATE KEY UPDATE schema_id=values(schema_id), version = version + 1, format=values(format), avro=values(avro)") {
       public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
         ps.setBytes(1, row);
         ps.setInt(2, finalSchemaId);
-        ps.setInt(3, storageFormat.ordinal());
-        ps.setBytes(4, serialize(value));
+        ps.setInt(3, format);
+        ps.setBytes(4, serialize);
       }
     }.insert();
     if (updated == 0) {
@@ -410,6 +412,8 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
       schemaId = storeSchema(schema);
     }
     final Integer finalSchemaId = schemaId;
+    final byte[] serialized = serialize(value);
+    final int format = storageFormat.ordinal();
     if (version == 0) {
       try {
         int updated = new Update(datasource, "INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?," +
@@ -417,8 +421,8 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
           public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
             ps.setBytes(1, row);
             ps.setInt(2, finalSchemaId);
-            ps.setInt(3, storageFormat.ordinal());
-            ps.setBytes(4, serialize(value));
+            ps.setInt(3, format);
+            ps.setBytes(4, serialized);
           }
         }.insert();
         if (updated == 0) {
@@ -432,8 +436,8 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
       int updated = new Update(datasource, "UPDATE " + mysqlTableName + " SET schema_id=?, version = version + 1, format=?, avro=? WHERE row=? AND version = ?") {
         public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
           ps.setInt(1, finalSchemaId);
-          ps.setInt(2, storageFormat.ordinal());
-          ps.setBytes(3, serialize(value));
+          ps.setInt(2, format);
+          ps.setBytes(3, serialized);
           ps.setBytes(4, row);
           ps.setLong(5, version);
         }
@@ -442,7 +446,12 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
         return false;
       }
     }
+    log(row, schemaId, format, serialized, version);
     return true;
+  }
+
+  // Override this to log your results
+  protected void log(byte[] row, Integer schemaId, int format, byte[] serialized, long version) {
   }
 
   /**
