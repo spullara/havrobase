@@ -13,19 +13,17 @@ import org.apache.avro.specific.SpecificRecord;
 public class Row<T extends SpecificRecord, K> {
   public final T value;
   public final K row;
-  public long version = -1;
+  public final long version;
 
   public Row(T value, K row) {
-    this.value = value;
-    this.row = row;
+    this(value, row, -1);
   }
 
   public Row(T value, K row, long version) {
-    this(value, row);
+    this.value = value;
+    this.row = row;
     this.version = version;
   }
-
-
 
   @Override
   public boolean equals(Object o) {
