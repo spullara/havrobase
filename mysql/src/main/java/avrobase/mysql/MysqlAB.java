@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   private static final int MAX_BUFFER_SIZE = 4096;
+  private static final byte[] EMPTY_BYTES = new byte[0];
   protected final ExecutorService es;
   protected final DataSource datasource;
   protected final AvroFormat storageFormat;
@@ -209,6 +210,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
         ps.setBytes(1, key);
       }
     }.insert();
+    log(key, 0, 0, EMPTY_BYTES, -1);
   }
 
   @Override
