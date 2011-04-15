@@ -41,7 +41,7 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
     }
   }
 
-  public void roll() throws SQLException {
+  public long roll() throws SQLException {
     Lock writeLock = lock.writeLock();
     writeLock.lock();
     try {
@@ -59,9 +59,19 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
         }
         tables.close();
       }
+      count = new AtomicInteger(0);
+      return id;
     } finally {
       writeLock.unlock();
     }
+  }
+
+  public int count() {
+    return count.get();
+  }
+
+  public String name() {
+    return mysqlTableName;
   }
 
   @Override
