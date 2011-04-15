@@ -59,6 +59,7 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
         }
         tables.close();
       }
+      connection.close();
       count = new AtomicInteger(0);
       return id;
     } finally {
