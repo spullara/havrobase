@@ -11,6 +11,8 @@ import org.apache.avro.specific.SpecificRecord;
 
 import javax.sql.DataSource;
 import java.awt.image.Kernel;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -182,4 +184,80 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
     }
     return iterable;
   }
+
+  public void writeSchemas(DataOutputStream dos) throws SQLException, IOException {
+    Connection connection = null;
+    try {
+      connection = datasource.getConnection();
+      PreparedStatement ps = connection.prepareStatement("SELECT id, hash, json FROM avro_schemas");
+      ResultSet rs = ps.executeQuery();
+      while (rs.next()) {
+        int id = rs.getInt(1);
+        byte[] hash = rs.getBytes(2);
+        byte[] json = rs.getBytes(3);
+        dos.writeInt(id);
+        dos.writeInt(hash.length);
+        dos.write(hash);
+        dos.writeInt(json.length);
+        dos.write(json);
+      }
+      dos.close();
+      connection.close();
+    } finally {
+      if (connection != null) {
+        try {
+          connection.close();
+        } catch (SQLException e) {
+          // closing anyway
+        }
+      }
+    }
+  }
+
+  public void roll(DataOutputStream dos) throws SQLException, IOException {
+    Connection connection = null;
+    try {
+      connection = datasource.getConnection();
+      long roll = roll();
+      DatabaseMetaData metaData = connection.getMetaData();
+      ResultSet tables = metaData.getTables(null, null, mysqlTableName + "_%", null);
+      Pattern p = Pattern.compile(mysqlTableName + "_([0-9]+)");
+      while (tables.next()) {
+        String tableName = tables.getString(3);
+        Matcher matcher = p.matcher(tableName);
+        if (matcher.matches()) {
+          if (Long.parseLong(matcher.group(1)) != roll) {
+            PreparedStatement ps = connection.prepareStatement("SELECT row, schema_id, version, format, avro FROM " + tableName + " ORDER BY row, version DESC");
+            ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+              byte[] row = rs.getBytes(1);
+              int schemaId = rs.getInt(2);
+              long version = rs.getLong(3);
+              int format = rs.getInt(4);
+              byte[] avro = rs.getBytes(5);
+              dos.writeInt(row.length);
+              dos.write(row);
+              dos.writeInt(schemaId);
+              dos.writeLong(version);
+              dos.writeInt(format);
+              dos.writeInt(avro.length);
+              dos.write(avro);
+            }
+            connection.prepareStatement("DROP TABLE " + tableName).executeUpdate();
+          }
+        }
+      }
+      dos.close();
+      connection.close();
+    } finally {
+      if (connection != null) {
+        try {
+          connection.close();
+        } catch (SQLException e) {
+          // closing anyway
+        }
+      }
+    }
+  }
+
 }
