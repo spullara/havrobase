@@ -9,6 +9,7 @@ import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 
 import javax.sql.DataSource;
+import java.awt.image.Kernel;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.PreparedStatement;
@@ -18,7 +19,9 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
@@ -106,7 +109,7 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
     });
   }
 
-  public Iterable<Row<T, K>> versions(final byte[] row) {
+  public Iterable<Row<T, K>> versions(final K row) {
     Connection connection = null;
     try {
       connection = datasource.getConnection();
@@ -135,18 +138,57 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
         }
       });
       for (String tableName : tableNames) {
-        new Query(datasource, "SELECT row, schema_id, version, format, avro FROM " + tableName + " WHERE row = ? ORDER BY version DESC") {
+        new Query<Iterable<Row<T, K>>>(datasource, "SELECT schema_id, version, format, avro FROM " + tableName + " WHERE row = ? ORDER BY version DESC") {
 
           @Override
           public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
-            ps.setBytes(1, row);
+            ps.setBytes(1, keytx.toBytes(row));
           }
 
           @Override
-          public Object execute(ResultSet rs) throws AvroBaseException, SQLException {
-            while(rs.next()) {
+          public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
+            return new Iterable<Row<T, K>>() {
+              @Override
+              public Iterator<Row<T, K>> iterator() {
+                return new Iterator<Row<T, K>>() {
+                  boolean nexted;
+                  boolean next;
 
-            }
+                  @Override
+                  public boolean hasNext() {
+                    if (nexted) return next;
+                    try {
+                      nexted = true;
+                      return next = rs.next();
+                    } catch (SQLException e) {
+                      throw new AvroBaseException(e);
+                    }
+                  }
+
+                  @Override
+                  public Row<T, K> next() {
+                    if (!nexted) hasNext();
+                    if (next) {
+                      try {
+                        int schemaId = rs.getInt(1);
+                        long version = rs.getLong(2);
+                        int format = rs.getInt(3);
+                        byte[] bytes = rs.getBytes(4);
+
+                        return new Row<T, K>(readValue(bytes, getSchema(schemaId), AvroFormat.values()[format]), row, version);
+                      } catch (SQLException e) {
+                        throw new AvroBaseException(e);
+                      }
+                    }
+                    throw new NoSuchElementException();
+                  }
+
+                  @Override
+                  public void remove() {
+                  }
+                };
+              }
+            };
           }
         }.query();
       }
