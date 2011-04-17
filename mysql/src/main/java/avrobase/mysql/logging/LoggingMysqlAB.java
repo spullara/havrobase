@@ -224,10 +224,11 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
       Pattern p = Pattern.compile(mysqlTableName + "_([0-9]+)");
       while (tables.next()) {
         String tableName = tables.getString(3);
+        String sql = "SELECT row, schema_id, version, format, avro FROM " + tableName + " ORDER BY row, version DESC";
         Matcher matcher = p.matcher(tableName);
         if (matcher.matches()) {
           if (Long.parseLong(matcher.group(1)) != roll) {
-            PreparedStatement ps = connection.prepareStatement("SELECT row, schema_id, version, format, avro FROM " + tableName + " ORDER BY row, version DESC");
+            PreparedStatement ps = connection.prepareStatement(sql);
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
               byte[] row = rs.getBytes(1);
