@@ -448,7 +448,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
         return false;
       }
     }
-    log(row, schemaId, format, serialized, version);
+    log(row, schemaId, format, serialized, version + 1);
     return true;
   }
 

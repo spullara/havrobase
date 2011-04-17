@@ -5,6 +5,7 @@ import avrobase.AvroFormat;
 import avrobase.Row;
 import avrobase.mysql.KeyStrategy;
 import avrobase.mysql.MysqlAB;
+import com.google.common.collect.Iterables;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 
@@ -64,7 +65,7 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
         if (!tables.next()) {
           // Create the table
           Statement statement = connection.createStatement();
-          statement.executeUpdate("CREATE TABLE " + logTableName + " ( row varbinary(256) primary key, schema_id integer not null, version integer not null, format tinyint not null, avro mediumblob not null ) ENGINE=INNODB");
+          statement.executeUpdate("CREATE TABLE " + logTableName + " ( row varbinary(256), schema_id integer not null, version integer not null, format tinyint not null, avro mediumblob not null, INDEX(row) ) ENGINE=INNODB");
           statement.close();
         }
         tables.close();
@@ -110,6 +111,7 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
   }
 
   public Iterable<Row<T, K>> versions(final K row) {
+    Iterable<Row<T, K>> iterable = null;
     Connection connection = null;
     try {
       connection = datasource.getConnection();
@@ -137,8 +139,9 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
           return (int)(t1 - t);
         }
       });
+      tableNames.add(0, name);
       for (String tableName : tableNames) {
-        new Query<Iterable<Row<T, K>>>(datasource, "SELECT schema_id, version, format, avro FROM " + tableName + " WHERE row = ? ORDER BY version DESC") {
+        Iterable<Row<T, K>> query = new Query<Iterable<Row<T, K>>>(datasource, "SELECT schema_id, version, format, avro FROM " + tableName + " WHERE row = ? ORDER BY version DESC") {
 
           @Override
           public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
@@ -147,53 +150,26 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
 
           @Override
           public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
-            return new Iterable<Row<T, K>>() {
-              @Override
-              public Iterator<Row<T, K>> iterator() {
-                return new Iterator<Row<T, K>>() {
-                  boolean nexted;
-                  boolean next;
-
-                  @Override
-                  public boolean hasNext() {
-                    if (nexted) return next;
-                    try {
-                      nexted = true;
-                      return next = rs.next();
-                    } catch (SQLException e) {
-                      throw new AvroBaseException(e);
-                    }
-                  }
-
-                  @Override
-                  public Row<T, K> next() {
-                    if (!nexted) hasNext();
-                    if (next) {
-                      try {
-                        int schemaId = rs.getInt(1);
-                        long version = rs.getLong(2);
-                        int format = rs.getInt(3);
-                        byte[] bytes = rs.getBytes(4);
-
-                        return new Row<T, K>(readValue(bytes, getSchema(schemaId), AvroFormat.values()[format]), row, version);
-                      } catch (SQLException e) {
-                        throw new AvroBaseException(e);
-                      }
-                    }
-                    throw new NoSuchElementException();
-                  }
-
-                  @Override
-                  public void remove() {
-                  }
-                };
-              }
-            };
+            List<Row<T, K>> result = new ArrayList<Row<T, K>>();
+            while(rs.next()) {
+              int schemaId = rs.getInt(1);
+              long version = rs.getLong(2);
+              int format = rs.getInt(3);
+              byte[] bytes = rs.getBytes(4);
+              result.add(new Row<T, K>(readValue(bytes, getSchema(schemaId), AvroFormat.values()[format]), row, version));
+            }
+            return result;
           }
         }.query();
+        if (iterable == null) {
+          iterable = query;
+        } else {
+          iterable = Iterables.concat(iterable, query);
+        }
       }
 
     } catch (Exception e) {
+      e.printStackTrace();
       throw new AvroBaseException(e);
     } finally {
       if (connection != null) {
@@ -204,6 +180,6 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
         }
       }
     }
-    return null;
+    return iterable;
   }
 }
