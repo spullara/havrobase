@@ -3,14 +3,17 @@ package avrobase.mysql.logging;
 import avrobase.AvroBaseException;
 import avrobase.AvroFormat;
 import avrobase.Row;
+import avrobase.StreamingAvroBase;
 import avrobase.mysql.KeyStrategy;
 import avrobase.mysql.MysqlAB;
 import com.google.common.collect.Iterables;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
+import org.omg.CORBA.portable.Streamable;
 
 import javax.sql.DataSource;
 import java.awt.image.Kernel;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.sql.Connection;
@@ -185,35 +188,6 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
     return iterable;
   }
 
-  public void writeSchemas(DataOutputStream dos) throws SQLException, IOException {
-    Connection connection = null;
-    try {
-      connection = datasource.getConnection();
-      PreparedStatement ps = connection.prepareStatement("SELECT id, hash, json FROM avro_schemas");
-      ResultSet rs = ps.executeQuery();
-      while (rs.next()) {
-        int id = rs.getInt(1);
-        byte[] hash = rs.getBytes(2);
-        byte[] json = rs.getBytes(3);
-        dos.writeInt(id);
-        dos.writeInt(hash.length);
-        dos.write(hash);
-        dos.writeInt(json.length);
-        dos.write(json);
-      }
-      dos.close();
-      connection.close();
-    } finally {
-      if (connection != null) {
-        try {
-          connection.close();
-        } catch (SQLException e) {
-          // closing anyway
-        }
-      }
-    }
-  }
-
   public void roll(DataOutputStream dos) throws SQLException, IOException {
     Connection connection = null;
     try {
@@ -236,18 +210,14 @@ public class LoggingMysqlAB<T extends SpecificRecord, K> extends MysqlAB<T, K> {
               long version = rs.getLong(3);
               int format = rs.getInt(4);
               byte[] avro = rs.getBytes(5);
-              dos.writeInt(row.length);
-              dos.write(row);
-              dos.writeInt(schemaId);
-              dos.writeLong(version);
-              dos.writeInt(format);
-              dos.writeInt(avro.length);
-              dos.write(avro);
+              dos.writeBoolean(true);
+              writeRow(dos, row, schemaId, version, format, avro);
             }
             connection.prepareStatement("DROP TABLE " + tableName).executeUpdate();
           }
         }
       }
+      dos.writeBoolean(false);
       dos.close();
       connection.close();
     } finally {

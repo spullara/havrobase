@@ -4,6 +4,7 @@ import avrobase.AvroBaseException;
 import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
+import avrobase.StreamingAvroBase;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
@@ -14,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import javax.sql.DataSource;
 import java.awt.geom.AffineTransform;
 import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -46,7 +49,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Time: 1:59:33 PM
  * TODO: consider column-type-specific support (via keytx)
  */
-public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
+public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> implements StreamingAvroBase {
   private static final int MAX_BUFFER_SIZE = 4096;
   private static final byte[] EMPTY_BYTES = new byte[0];
   protected final ExecutorService es;
@@ -216,6 +219,135 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   @Override
   public Iterable<Row<T, K>> scan(K startRow, K stopRow) throws AvroBaseException {
     return scan(startRow != null ? keytx.toBytes(startRow) : null, stopRow != null ? keytx.toBytes(stopRow) : null);
+  }
+
+  public void writeSchemas(DataOutputStream dos) throws SQLException, IOException {
+    Connection connection = null;
+    try {
+      connection = datasource.getConnection();
+      PreparedStatement ps = connection.prepareStatement("SELECT id, hash, json FROM avro_schemas");
+      ResultSet rs = ps.executeQuery();
+      while (rs.next()) {
+        int id = rs.getInt(1);
+        byte[] hash = rs.getBytes(2);
+        byte[] json = rs.getBytes(3);
+        dos.writeBoolean(true);
+        writeSchemaRow(dos, id, hash, json);
+      }
+      dos.writeBoolean(false);
+      dos.close();
+      connection.close();
+    } finally {
+      if (connection != null) {
+        try {
+          connection.close();
+        } catch (SQLException e) {
+          // closing anyway
+        }
+      }
+    }
+  }
+
+  protected void writeSchemaRow(DataOutputStream dos, int id, byte[] hash, byte[] json) throws IOException {
+    dos.writeInt(id);
+    dos.writeInt(hash.length);
+    dos.write(hash);
+    dos.writeInt(json.length);
+    dos.write(json);
+  }
+
+  protected void writeRow(DataOutputStream dos, byte[] row, int schemaId, long version, int format, byte[] avro) throws IOException {
+    dos.writeInt(row.length);
+    dos.write(row);
+    dos.writeInt(schemaId);
+    dos.writeLong(version);
+    dos.writeInt(format);
+    dos.writeInt(avro.length);
+    dos.write(avro);
+  }
+
+  @Override
+  public void exportData(final DataOutputStream dos) {
+    new Query<Iterable<Row<T, K>>>(datasource, "SELECT row, schema_id, version, format, avro FROM " + mysqlTableName) {
+
+      @Override
+      public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+      }
+
+      @Override
+      public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
+        while(rs.next()) {
+          byte[] row = rs.getBytes(1);
+          int schemaId = rs.getInt(2);
+          long version = rs.getLong(3);
+          int format = rs.getInt(4);
+          byte[] bytes = rs.getBytes(5);
+          try {
+            dos.writeBoolean(true);
+            writeRow(dos, row, schemaId, version, format, bytes);
+          } catch (IOException e) {
+            throw new AvroBaseException("Could not write", e);
+          }
+        }
+        return null;
+      }
+    }.query();
+    try {
+      dos.writeBoolean(false);
+    } catch (IOException e) {
+      throw new AvroBaseException("Could not closing boolean", e);
+    }
+  }
+
+  @Override
+  public void exportSchema(DataOutputStream dos) {
+    try {
+      dos.writeBoolean(true);
+      writeSchemas(dos);
+      dos.writeBoolean(false);
+    } catch (Exception e) {
+      throw new AvroBaseException(e);
+    }
+  }
+
+  @Override
+  public void importData(DataInputStream dis) {
+    try {
+      while (dis.readBoolean()) {
+        byte[] row = new byte[dis.readInt()];
+        dis.readFully(row);
+        int schemaId = dis.readInt();
+        long version = dis.readLong();
+        int format = dis.readInt();
+        byte[] bytes = new byte[dis.readInt()];
+        dis.readFully(bytes);
+        T t = readValue(bytes, getSchema(schemaId), AvroFormat.values()[format]);
+        put(keytx.fromBytes(row), t);
+      }
+    } catch (IOException e) {
+      throw new AvroBaseException("Failed to read", e);
+    }
+  }
+
+  @Override
+  public void importSchema(DataInputStream dis) {
+    try {
+      while (dis.readBoolean()) {
+        final int id = dis.readInt();
+        final byte[] hash = new byte[dis.readInt()];
+        final byte[] json = new byte[dis.readInt()];
+        new Update(datasource, "INSERT INTO " + schemaTable + " (id, hash, json) VALUES (?,?,?) " +
+                "ON DUPLICATE KEY UPDATE hash=values(hash), json=values(json)") {
+          public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+            ps.setInt(1, id);
+            ps.setBytes(2, hash);
+            ps.setBytes(3, json);
+          }
+        }.insert();
+      }
+    } catch (IOException e) {
+      throw new AvroBaseException("Failed to read", e);
+    }
   }
 
   public abstract static class Update {
