@@ -235,7 +235,6 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
         writeSchemaRow(dos, id, hash, json);
       }
       dos.writeBoolean(false);
-      dos.close();
       connection.close();
     } finally {
       if (connection != null) {

@@ -49,7 +49,7 @@ public abstract class ForwardingAvroBase<T extends SpecificRecord, K> extends Fo
   }
 
   @Override
-  protected AvroBase<T,K> delegate() {
+  public AvroBase<T,K> delegate() {
     return delegate;
   }
 }
