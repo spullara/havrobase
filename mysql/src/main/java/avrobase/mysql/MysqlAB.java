@@ -13,7 +13,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
-import java.awt.geom.AffineTransform;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -26,7 +25,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
@@ -35,7 +37,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -66,14 +70,14 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
 
   @Inject
   public MysqlAB(
-          ExecutorService es,
-          DataSource datasource,
-          String table,
-          String family,
-          String schemaTable,
-          Schema schema,
-          AvroFormat storageFormat,
-          KeyStrategy<K> keytx) throws AvroBaseException {
+      ExecutorService es,
+      DataSource datasource,
+      String table,
+      String family,
+      String schemaTable,
+      Schema schema,
+      AvroFormat storageFormat,
+      KeyStrategy<K> keytx) throws AvroBaseException {
 
     super(schema, storageFormat);
     this.es = es;
@@ -275,7 +279,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
 
       @Override
       public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
-        while(rs.next()) {
+        while (rs.next()) {
           byte[] row = rs.getBytes(1);
           int schemaId = rs.getInt(2);
           long version = rs.getLong(3);
@@ -311,18 +315,51 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
 
   @Override
   public void importData(DataInputStream dis) {
+    int cpus = Runtime.getRuntime().availableProcessors() * 2;
+    ExecutorService es = Executors.newFixedThreadPool(cpus);
+    final Semaphore sema = new Semaphore(cpus);
     try {
+      new Update(datasource, "DELETE FROM " + mysqlTableName) {
+        public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+        }
+      }.insert();
       while (dis.readBoolean()) {
-        byte[] row = new byte[dis.readInt()];
+        final byte[] row = new byte[dis.readInt()];
         dis.readFully(row);
-        int schemaId = dis.readInt();
-        long version = dis.readLong();
-        int format = dis.readInt();
-        byte[] bytes = new byte[dis.readInt()];
+        final int schemaId = dis.readInt();
+        final long version = dis.readLong();
+        final int format = dis.readInt();
+        final byte[] bytes = new byte[dis.readInt()];
         dis.readFully(bytes);
-        T t = readValue(bytes, getSchema(schemaId), AvroFormat.values()[format]);
-        put(keytx.fromBytes(row), t);
+        sema.acquireUninterruptibly();
+        es.submit(new Runnable() {
+          @Override
+          public void run() {
+            try {
+              Connection c = null;
+              PreparedStatement ps = null;
+              try {
+                c = datasource.getConnection();
+                String statement = "INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?,?,?,?)";
+                ps = c.prepareStatement(statement);
+                ps.setBytes(1, row);
+                ps.setInt(2, schemaId);
+                ps.setLong(3, version);
+                ps.setInt(4, format);
+                ps.setBytes(5, bytes);
+                ps.executeUpdate();
+              } finally {
+                if (ps != null) ps.close();
+                if (c != null) c.close();
+              }
+            } catch (SQLException e) {
+              throw new AvroBaseException("Database problem", e);
+            }
+            sema.release();
+          }
+        });
       }
+
     } catch (IOException e) {
       throw new AvroBaseException("Failed to read", e);
     }
@@ -334,9 +371,11 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
       while (dis.readBoolean()) {
         final int id = dis.readInt();
         final byte[] hash = new byte[dis.readInt()];
+        dis.readFully(hash);
         final byte[] json = new byte[dis.readInt()];
+        dis.readFully(json);
         new Update(datasource, "INSERT INTO " + schemaTable + " (id, hash, json) VALUES (?,?,?) " +
-                "ON DUPLICATE KEY UPDATE hash=values(hash), json=values(json)") {
+            "ON DUPLICATE KEY UPDATE hash=values(hash), json=values(json)") {
           public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
             ps.setInt(1, id);
             ps.setBytes(2, hash);
@@ -347,6 +386,11 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
     } catch (IOException e) {
       throw new AvroBaseException("Failed to read", e);
     }
+  }
+
+  public void clear() {
+    abbrevSchema.clear();
+    schemaAbbrev.clear();
   }
 
   public abstract static class Update {
@@ -525,7 +569,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
     final byte[] serialize = serialize(value);
     final int format = storageFormat.ordinal();
     int updated = new Update(datasource, "INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?,1,?,?) " +
-            "ON DUPLICATE KEY UPDATE schema_id=values(schema_id), version = version + 1, format=values(format), avro=values(avro)") {
+        "ON DUPLICATE KEY UPDATE schema_id=values(schema_id), version = version + 1, format=values(format), avro=values(avro)") {
       public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
         ps.setBytes(1, row);
         ps.setInt(2, finalSchemaId);
@@ -550,7 +594,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
     if (version == 0) {
       try {
         int updated = new Update(datasource, "INSERT INTO " + mysqlTableName + " (row, schema_id, version, format, avro) VALUES (?,?," +
-                "1,?,?)") {
+            "1,?,?)") {
           public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
             ps.setBytes(1, row);
             ps.setInt(2, finalSchemaId);
