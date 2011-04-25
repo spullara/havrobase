@@ -468,6 +468,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
   }
 
   public abstract static class Query<R> {
+    private static final int FETCH_SIZE = 100;
     private String statement;
     private DataSource datasource;
 
@@ -488,6 +489,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
         try {
           c = datasource.getConnection();
           ps = c.prepareStatement(statement);
+          ps.setFetchSize(FETCH_SIZE);
           setup(ps);
           rs = ps.executeQuery();
           return execute(rs);
