@@ -28,16 +28,16 @@
 
   <repositories>
     <repository>
-      <id>javarants snapshots</id>
+      <id>sonatype-nexus-snapshots</id>
       <url>https://oss.sonatype.org/content/repositories/snapshots</url>
     </repository>
   </repositories>
 
   <distributionManagement>
-    <site>
-      <id>www.javarants.com</id>
-      <url>scp://www.javarants.com/opt/sites/javarants/sites/</url>
-    </site>
+    <repository>
+      <id>sonatype-nexus-snapshots</id>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+    </repository>
   </distributionManagement>
 
   <dependencies>
