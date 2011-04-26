@@ -1,5 +1,6 @@
 package havrobase;
 
+import avrobase.TimestampGenerator;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;

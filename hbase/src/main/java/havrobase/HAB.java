@@ -4,6 +4,7 @@ import avrobase.AvroBaseException;
 import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
+import avrobase.TimestampGenerator;
 import com.google.common.base.Supplier;
 import com.google.inject.Inject;
 import com.google.inject.internal.Nullable;

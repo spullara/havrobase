@@ -1,4 +1,4 @@
-package havrobase;
+package avrobase;
 
 import com.google.inject.Singleton;
 
