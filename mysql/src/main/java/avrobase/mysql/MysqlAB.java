@@ -25,10 +25,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
@@ -275,6 +272,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
 
       @Override
       public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+        ps.setFetchSize(Integer.MIN_VALUE);
       }
 
       @Override
@@ -468,7 +466,6 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
   }
 
   public abstract static class Query<R> {
-    private static final int FETCH_SIZE = 100;
     private String statement;
     private DataSource datasource;
 
@@ -489,7 +486,6 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
         try {
           c = datasource.getConnection();
           ps = c.prepareStatement(statement);
-          ps.setFetchSize(FETCH_SIZE);
           setup(ps);
           rs = ps.executeQuery();
           return execute(rs);
@@ -677,6 +673,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
               public Void call() throws Exception {
                 new Query<Iterable<Row<T, K>>>(datasource, getStatement(start, stop, skip)) {
                   public void setup(PreparedStatement ps) throws AvroBaseException, SQLException {
+                    ps.setFetchSize(Integer.MIN_VALUE);
                     int i = 1;
                     if (start != null) {
                       ps.setBytes(i++, start);
