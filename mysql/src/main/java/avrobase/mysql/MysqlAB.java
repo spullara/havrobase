@@ -5,6 +5,8 @@ import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
 import avrobase.StreamingAvroBase;
+import com.google.common.primitives.Bytes;
+import com.google.common.primitives.UnsignedBytes;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
@@ -665,7 +667,6 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
           boolean skip = false;
           byte[] start = startRow;
           byte[] stop = stopRow;
-
           Future<Void> submit = getSubmit();
 
           Future<Void> getSubmit() {
@@ -697,7 +698,9 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
                           queue.add(newrow);
                           queue.notify();
                           skip = true;
-                          start = row;
+                          // Have to be careful as the end user can modify the row
+                          start = new byte[row.length];
+                          System.arraycopy(row, 0, start, 0, row.length);
                           int buffer = ai.get();
                           if (queue.size() > buffer) {
                             if (buffer < MAX_BUFFER_SIZE) {
