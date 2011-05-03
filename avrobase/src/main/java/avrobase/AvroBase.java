@@ -1,5 +1,6 @@
 package avrobase;
 
+import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
 
 /**
