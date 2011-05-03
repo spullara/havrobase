@@ -20,6 +20,7 @@ import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
+import org.apache.solr.common.params.ShardParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -242,7 +243,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
           }
         }, current + 100);
       }
-      if (current - lastOptimize > 3600) {
+      if (current - lastOptimize > 3600000) {
         lastOptimize = current;
         req.setAction(AbstractUpdateRequest.ACTION.OPTIMIZE, false, false);
       }
