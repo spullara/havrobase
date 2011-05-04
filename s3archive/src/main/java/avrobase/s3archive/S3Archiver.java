@@ -135,27 +135,7 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
             }
             // Scan S3
             if (files == null) {
-              try {
-                files = new ArrayList<S3Object>(newArrayList(filter(Arrays.asList(s3.listObjects(bucket, path, null)), new Predicate<S3Object>() {
-                  public boolean apply(@Nullable S3Object input) {
-                    return !input.getName().equals(path);
-                  }
-                })));
-              } catch (S3ServiceException e) {
-                throw new AvroBaseException("Failed to read files from S3 bucket", e);
-              }
-              Collections.sort(files, new Comparator<S3Object>() {
-                @Override
-                public int compare(S3Object s3Object, S3Object s3Object1) {
-                  try {
-                    final byte[] key = Hex.decodeHex(filename(s3Object).toCharArray());
-                    final byte[] key1 = Hex.decodeHex(filename(s3Object1).toCharArray());
-                    return bytesComparator.compare(key, key1);
-                  } catch (DecoderException e) {
-                    throw new AvroBaseException("Failed to decode filename: " + s3Object.getName(), e);
-                  }
-                }
-              });
+              files = getArchives();
             }
             // If .next() hasn't been called return the previous answer
             if (hasmore != null) return hasmore;
@@ -244,6 +224,32 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
     };
   }
 
+  private ArrayList<S3Object> getArchives() {
+    ArrayList<S3Object> files1;
+    try {
+      files1 = new ArrayList<S3Object>(newArrayList(filter(Arrays.asList(s3.listObjects(bucket, path, null)), new Predicate<S3Object>() {
+        public boolean apply(@Nullable S3Object input) {
+          return !input.getName().equals(path);
+        }
+      })));
+    } catch (S3ServiceException e) {
+      throw new AvroBaseException("Failed to read files from S3 bucket", e);
+    }
+    Collections.sort(files1, new Comparator<S3Object>() {
+      @Override
+      public int compare(S3Object s3Object, S3Object s3Object1) {
+        try {
+          final byte[] key = Hex.decodeHex(filename(s3Object).toCharArray());
+          final byte[] key1 = Hex.decodeHex(filename(s3Object1).toCharArray());
+          return bytesComparator.compare(key, key1);
+        } catch (DecoderException e) {
+          throw new AvroBaseException("Failed to decode filename: " + s3Object.getName(), e);
+        }
+      }
+    });
+    return files1;
+  }
+
   private String filename(S3Object s3Object) {
     return s3Object.getName().substring(path.length());
   }
@@ -256,6 +262,21 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
    * @throws AvroBaseException
    */
   public void roll(byte[] startrow) throws AvroBaseException {
+    // Find the first entry in the archives
+    ArrayList<S3Object> archives = getArchives();
+    byte[] archiveStartrow;
+    if (archives.size() > 0) {
+      try {
+        archiveStartrow = Hex.decodeHex(archives.get(0).getName().substring(path.length()).toCharArray());
+      } catch (DecoderException e) {
+        throw new AvroBaseException("Failed to get start row from archives: " + archives, e);
+      }
+      if (bytesComparator.compare(startrow, archiveStartrow) >= 0) {
+        return;
+      }
+    } else {
+      archiveStartrow = null;
+    }
     File file = null;
     try {
       file = File.createTempFile("log", "gz");
@@ -264,6 +285,11 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
       dos.writeInt(bytes.length);
       dos.write(bytes);
       for (Row<T, byte[]> tRow : delegate().scan(startrow, null)) {
+        if (archiveStartrow != null) {
+          if (bytesComparator.compare(tRow.row, archiveStartrow) >= 0) {
+            break;
+          }
+        }
         dos.writeBoolean(true);
         dos.writeInt(tRow.row.length);
         dos.write(tRow.row);
