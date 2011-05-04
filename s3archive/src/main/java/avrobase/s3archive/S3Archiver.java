@@ -172,12 +172,11 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
                       }
                     }
                     if (lastdelegatekey != null) {
+                        // skip archived rows we have already scanned
                       final int compare = bytesComparator.compare(lastdelegatekey, row);
                       if (compare < 0) {
                         break;
                       } else {
-                        // delete them from the local store or ignore them?
-                        // skip for now
                         currentstream.readFully(new byte[currentstream.readInt()]);
                       }
                     } else {
