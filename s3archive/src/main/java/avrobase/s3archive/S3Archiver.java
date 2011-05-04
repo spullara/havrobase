@@ -8,7 +8,9 @@ import com.google.common.base.Charsets;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
+import com.google.common.primitives.Longs;
 import com.google.common.primitives.SignedBytes;
+import com.google.common.primitives.UnsignedBytes;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.io.DecoderFactory;
@@ -33,8 +35,10 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -96,7 +100,7 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
     return super.get(row);
   }
 
-  private Comparator<byte[]> bytesComparator = SignedBytes.lexicographicalComparator();
+  private Comparator<byte[]> bytesComparator = UnsignedBytes.lexicographicalComparator();
   private static DecoderFactory decoderFactory = new DecoderFactory();
   private static EncoderFactory encoderFactory = new EncoderFactory();
 
@@ -182,10 +186,12 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
                     currentstream.readFully(row);
                     if (lastdelegatekey != null) {
                       final int compare = bytesComparator.compare(lastdelegatekey, row);
-                      if (compare <= 0) {
+                      if (compare < 0) {
                         break;
                       } else {
                         // delete them from the local store or ignore them?
+                        // skip for now
+                        currentstream.readFully(new byte[currentstream.readInt()]);
                       }
                     } else {
                       break;
