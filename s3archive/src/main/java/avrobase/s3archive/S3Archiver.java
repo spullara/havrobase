@@ -59,6 +59,8 @@ import static com.google.common.collect.Lists.newArrayList;
  * boolean - has next
  * length, bytes - row
  * length, bytes - value
+ *
+ * Typically you would move all to S3 but only truncate after some delay for fast access to more recent data.
  * <p/>
  * User: sam
  * Date: 5/3/11
@@ -246,6 +248,13 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
     return s3Object.getName().substring(path.length());
   }
 
+  /**
+   * Roll copies everything from startrow to the end to S3 in
+   * a new file.
+   *
+   * @param startrow
+   * @throws AvroBaseException
+   */
   public void roll(byte[] startrow) throws AvroBaseException {
     File file = null;
     try {
@@ -285,11 +294,20 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
           }
         }
       }
-      for (Row<T, byte[]> tRow : delegate().scan(startrow, null)) {
-        delegate().delete(tRow.row);
-      }
     } catch (IOException e) {
       throw new AvroBaseException("Failed to read/write file: " + file, e);
+    }
+  }
+
+  /**
+   * Truncate deletes everything after startrow. You only want to do this after
+   * you have archived it all.
+   * 
+   * @param startrow
+   */
+  public void truncate(byte[] startrow) {
+    for (Row<T, byte[]> tRow : delegate().scan(startrow, null)) {
+      delegate().delete(tRow.row);
     }
   }
 }
