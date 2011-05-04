@@ -6,10 +6,6 @@ import avrobase.ForwardingAvroBase;
 import avrobase.Row;
 import com.google.common.base.Charsets;
 import com.google.common.base.Predicate;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
-import com.google.common.primitives.Longs;
-import com.google.common.primitives.SignedBytes;
 import com.google.common.primitives.UnsignedBytes;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
@@ -35,10 +31,8 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,7 +42,7 @@ import java.util.NoSuchElementException;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-import static com.google.common.collect.Iterables.*;
+import static com.google.common.collect.Iterables.filter;
 import static com.google.common.collect.Lists.newArrayList;
 
 /**
@@ -105,7 +99,7 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
   private static EncoderFactory encoderFactory = new EncoderFactory();
 
   @Override
-  public Iterable<Row<T, byte[]>> scan(byte[] startRow, byte[] stopRow) throws AvroBaseException {
+  public Iterable<Row<T, byte[]>> scan(byte[] startRow, final byte[] stopRow) throws AvroBaseException {
     final Iterable<Row<T, byte[]>> scan = delegate().scan(startRow, stopRow);
     return new Iterable<Row<T, byte[]>>() {
       @Override
@@ -133,6 +127,9 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
             } else if (lastdelegatekey == null) {
               lastdelegatekey = lastdelegaterow == null ? null : lastdelegaterow.row;
               lastdelegaterow = null;
+            }
+            if (lastdelegatekey != null && stopRow != null && bytesComparator.compare(lastdelegatekey, stopRow) >= 0) {
+              return false;
             }
             // Scan S3
             if (files == null) {
@@ -184,6 +181,14 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
                     // local store but haven't been deleted yet
                     row = new byte[currentstream.readInt()];
                     currentstream.readFully(row);
+                    if (stopRow != null) {
+                      int compare = bytesComparator.compare(row, stopRow);
+                      if (compare >= 0) {
+                        currentstream.close();
+                        currentstream = null;
+                        return hasmore = false;
+                      }
+                    }
                     if (lastdelegatekey != null) {
                       final int compare = bytesComparator.compare(lastdelegatekey, row);
                       if (compare < 0) {
@@ -216,7 +221,7 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
             // Grab the next local value
             if (lastdelegatekey == null) return lastdelegaterow = iterator.next();
             // Grab the next S3 value
-            if (files.size() == 0 && currentstream == null) throw new NoSuchElementException();
+            if ((files.size() == 0 && currentstream == null) || (hasmore != null && !hasmore)) throw new NoSuchElementException();
             hasmore = null;
             try {
               byte[] bytes = new byte[currentstream.readInt()];
