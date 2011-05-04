@@ -5,6 +5,9 @@ import avrobase.AvroBaseException;
 import avrobase.ForwardingAvroBase;
 import avrobase.Row;
 import com.google.common.base.Charsets;
+import com.google.common.base.Predicate;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.primitives.SignedBytes;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
@@ -21,11 +24,13 @@ import org.jets3t.service.S3ServiceException;
 import org.jets3t.service.ServiceException;
 import org.jets3t.service.model.S3Object;
 
+import javax.annotation.Nullable;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -38,6 +43,9 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
+
+import static com.google.common.collect.Iterables.*;
+import static com.google.common.collect.Lists.newArrayList;
 
 /**
  * The S3 Archiver will move entries from the delegate AvroBase to a log file format in S3. When
@@ -125,7 +133,11 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
             // Scan S3
             if (files == null) {
               try {
-                files = new ArrayList<S3Object>(Arrays.asList(s3.listObjects(bucket, path, null)));
+                files = new ArrayList<S3Object>(newArrayList(filter(Arrays.asList(s3.listObjects(bucket, path, null)), new Predicate<S3Object>() {
+                  public boolean apply(@Nullable S3Object input) {
+                    return !input.getName().equals(path);
+                  }
+                })));
               } catch (S3ServiceException e) {
                 throw new AvroBaseException("Failed to read files from S3 bucket", e);
               }
@@ -133,8 +145,8 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
                 @Override
                 public int compare(S3Object s3Object, S3Object s3Object1) {
                   try {
-                    final byte[] key = Hex.decodeHex(s3Object.getName().toCharArray());
-                    final byte[] key1 = Hex.decodeHex(s3Object1.getName().toCharArray());
+                    final byte[] key = Hex.decodeHex(filename(s3Object).toCharArray());
+                    final byte[] key1 = Hex.decodeHex(filename(s3Object1).toCharArray());
                     return bytesComparator.compare(key, key1);
                   } catch (DecoderException e) {
                     throw new AvroBaseException("Failed to decode filename: " + s3Object.getName(), e);
@@ -150,8 +162,10 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
                 if (files.size() == 0) return hasmore = false;
                 final S3Object nextFile = files.remove(0);
                 try {
-                  currentstream = new DataInputStream(new GZIPInputStream(nextFile.getDataInputStream()));
-                  schema = Schema.parse(new ByteArrayInputStream(new byte[currentstream.readInt()]));
+                  currentstream = new DataInputStream(new GZIPInputStream(s3.getObject(nextFile.getBucketName(), nextFile.getName()).getDataInputStream()));
+                  final byte[] bytes = new byte[currentstream.readInt()];
+                  currentstream.readFully(bytes);
+                  schema = Schema.parse(new ByteArrayInputStream(bytes));
                 } catch (ServiceException e) {
                   throw new AvroBaseException("Failed to read inputstream from S3: " + nextFile, e);
                 } catch (IOException e) {
@@ -166,15 +180,24 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
                     // local store but haven't been deleted yet
                     row = new byte[currentstream.readInt()];
                     currentstream.readFully(row);
-                    if (lastdelegaterow != null) {
-                      if (bytesComparator.compare(lastdelegatekey, row) >= 0) {
+                    if (lastdelegatekey != null) {
+                      final int compare = bytesComparator.compare(lastdelegatekey, row);
+                      if (compare <= 0) {
                         break;
                       } else {
                         // delete them from the local store or ignore them?
                       }
+                    } else {
+                      break;
                     }
+                  } else {
+                    currentstream.close();
+                    currentstream = null;
                   }
                 } while (hasmore);
+              } catch (EOFException e) {
+                e.printStackTrace();
+                return hasmore = false;
               } catch (IOException e) {
                 throw new AvroBaseException("Failed to read s3 object stream", e);
               }
@@ -208,6 +231,10 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
     };
   }
 
+  private String filename(S3Object s3Object) {
+    return s3Object.getName().substring(path.length());
+  }
+
   public void roll(byte[] startrow) throws AvroBaseException {
     File file = null;
     try {
@@ -230,6 +257,7 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
         dos.write(bytes);
       }
       dos.writeBoolean(false);
+      dos.flush();
       dos.close();
       // Retry 3 times
       for (int i = 0; i < 3; i++) {
@@ -238,13 +266,16 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
         s3o.setDataInputStream(new BufferedInputStream(new FileInputStream(file)));
         s3o.setContentType("application/gzip");
         try {
-          s3.putObject("com.bagcheck.static", s3o);
+          s3.putObject(bucket, s3o);
           break;
         } catch (S3ServiceException e) {
           if (i == 2) {
             throw new AvroBaseException("Failed to upload to S3", e);
           }
         }
+      }
+      for (Row<T, byte[]> tRow : delegate().scan(startrow, null)) {
+        delegate().delete(tRow.row);
       }
     } catch (IOException e) {
       throw new AvroBaseException("Failed to read/write file: " + file, e);
