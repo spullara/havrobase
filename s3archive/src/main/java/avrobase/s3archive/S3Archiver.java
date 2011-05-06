@@ -69,7 +69,7 @@ import static com.google.common.collect.Lists.newArrayList;
  * To change this template use File | Settings | File Templates.
  */
 public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, byte[]> {
-  private S3Service s3;
+  protected S3Service s3;
   private String bucket;
   private String path;
   private Schema actualSchema;
