@@ -33,6 +33,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -145,7 +146,7 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
                 if (files.size() == 0) return hasmore = false;
                 final S3Object nextFile = files.remove(0);
                 try {
-                  currentstream = new DataInputStream(new GZIPInputStream(s3.getObject(nextFile.getBucketName(), nextFile.getName()).getDataInputStream()));
+                  currentstream = new DataInputStream(new GZIPInputStream(getInputStream(nextFile)));
                   final byte[] bytes = new byte[currentstream.readInt()];
                   currentstream.readFully(bytes);
                   schema = Schema.parse(new ByteArrayInputStream(bytes));
@@ -221,6 +222,10 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
         };
       }
     };
+  }
+
+  protected InputStream getInputStream(S3Object nextFile) throws ServiceException, IOException {
+    return s3.getObject(nextFile.getBucketName(), nextFile.getName()).getDataInputStream();
   }
 
   private ArrayList<S3Object> getArchives() {
