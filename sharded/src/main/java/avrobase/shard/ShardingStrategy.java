@@ -27,14 +27,39 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Time: 6:44 PM
  */
 public interface ShardingStrategy<T extends SpecificRecord, K> {
+  /**
+   * Locate a shard for a row.
+   * @param row
+   * @return
+   */
   Shard<T, K> find(K row);
 
+  /**
+   * Finish using a found shard.
+   * @param shard
+   */
   void done(Shard<T, K> shard);
 
+  /**
+   * Add a new shardable avrobase to the system with a particular
+   * weighting.
+   * @param avroBase
+   * @param weight
+   */
   void add(ShardableAvroBase<T, K> avroBase, double weight);
 
+  /**
+   * Some operations require balance to be achieved before they can
+   * be performed.
+   * @throws InterruptedException
+   */
   void waitForBalance() throws InterruptedException;
 
+  /**
+   * The partition strategy divides the key space between multiple shardable avrobases.
+   * @param <T>
+   * @param <K>
+   */
   public static class Partition<T extends SpecificRecord, K> implements ShardingStrategy<T, K> {
 
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
@@ -63,6 +88,11 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
       }
     }
 
+    /**
+     * Scan the list of shards for the shard that contains the row.
+     * @param row
+     * @return
+     */
     @Override
     public Shard<T, K> find(K row) {
       // TODO: convert to binary search
@@ -85,6 +115,10 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
       }
     }
 
+    /**
+     * Remove the shard from the list of shards currently being used.
+     * @param tkShard
+     */
     @Override
     public void done(Shard<T, K> tkShard) {
       synchronized (usedShards) {
@@ -93,6 +127,14 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
       }
     }
 
+    /**
+     * Add a new shardable avrobase then balance the shards. The new shard is added to the
+     * end of the shard list and keys are then balanced starting at the first shard through
+     * the last shard. The weighting is done at sliding point in time and assumes that
+     * the weights dont change much during the counting process.
+     * @param avroBase
+     * @param weight
+     */
     @Override
     public void add(final ShardableAvroBase<T, K> avroBase, final double weight) {
       if (activeShards.size() == 0) {
@@ -122,7 +164,6 @@ public interface ShardingStrategy<T extends SpecificRecord, K> {
                     long count = 0;
                     K end = finalI + 1 == activeShards.size() ? null : activeShards.get(finalI + 1).start;
                     for (K row : shard.avrobase().scanKeys(shard.start, end)) {
-                      // TODO: Add a method to AvroBase that gives only keys back
                       count++;
                     }
                     return count;
