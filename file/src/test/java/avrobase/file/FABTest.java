@@ -61,6 +61,16 @@ public class FABTest {
   @Test
   public void multithreadedContention() throws InterruptedException, IOException {
     final FAB<User> userRAB = getFAB("");
+    multithreadedtest(userRAB);
+  }
+
+  @Test
+  public void multithreadedContention2() throws InterruptedException, IOException {
+    final FAB<User> userRAB = getFAB("/Volumes/Data");
+    multithreadedtest(userRAB);
+  }
+
+  private void multithreadedtest(final FAB<User> userRAB) throws InterruptedException {
     User user = getUser();
     final List<String> keys = new ArrayList<String>();
     for (int i = 0; i < 100; i++) {
@@ -101,45 +111,13 @@ public class FABTest {
   }
 
   @Test
-  public void multithreadedContention2() throws InterruptedException, IOException {
+  public void scantest() {
     final FAB<User> userRAB = getFAB("/Volumes/Data");
-    User user = getUser();
-    final List<String> keys = new ArrayList<String>();
-    for (int i = 0; i < 100; i++) {
-      keys.add(userRAB.create(user));
+    int total = 0;
+    for (Row<User, String> userStringRow : userRAB.scan(null, null)) {
+      total++;
     }
-    final Random r = new SecureRandom();
-    ExecutorService es = Executors.newCachedThreadPool();
-    final AtomicInteger failures = new AtomicInteger(0);
-    final AtomicInteger total = new AtomicInteger(0);
-    final Semaphore s = new Semaphore(100);
-    long start = System.currentTimeMillis();
-    for (int i = 0; i < 20; i++) {
-      s.acquireUninterruptibly();
-      es.submit(new Runnable() {
-        @Override
-        public void run() {
-          try {
-            for (int i = 0; i < 500; i++) {
-              total.incrementAndGet();
-              String key = keys.get(r.nextInt(keys.size()));
-              Row<User, String> userStringRow = userRAB.get(key);
-              if (!userRAB.put(key, userStringRow.value, userStringRow.version)) {
-                failures.incrementAndGet();
-              }
-            }
-          } catch (Exception e) {
-            e.printStackTrace();
-          } finally {
-            s.release();
-          }
-        }
-      });
-    }
-    s.acquireUninterruptibly(100);
-    es.shutdown();
-    es.awaitTermination(1000, TimeUnit.SECONDS);
-    System.out.println(failures + " out of " + total + " in " + (System.currentTimeMillis() - start) + "ms");
+    System.out.println(total);
   }
 
 

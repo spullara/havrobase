@@ -6,7 +6,6 @@ import avrobase.AvroFormat;
 import avrobase.Creator;
 import avrobase.Mutator;
 import avrobase.Row;
-import avrobase.shard.ShardableAvroBase;
 import com.google.common.base.Function;
 import com.google.common.base.Supplier;
 import com.google.common.collect.Iterables;
@@ -19,18 +18,13 @@ import org.apache.avro.specific.SpecificRecord;
 
 import javax.annotation.Nullable;
 import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -42,6 +36,9 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static com.google.common.collect.Iterables.transform;
+import static java.util.Arrays.asList;
+
 /**
  * File based avrobase.
  * <p/>
@@ -49,7 +46,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Date: 10/10/10
  * Time: 4:08 PM
  */
-public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> implements ShardableAvroBase<T, String> {
+public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
 
   private static final int HASH_LENGTH = 64;
   private static final int LONG_LENGTH = 8;
@@ -73,114 +70,78 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> imple
   }
 
   @Override
-  public byte[] representation() throws AvroBaseException {
-    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-    BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(baos));
-    try {
-      bw.write(dir.getCanonicalPath());
-      bw.write("\n");
-      bw.write(schemaDir.getCanonicalPath());
-      bw.write("\n");
-      bw.close();
-      return baos.toByteArray();
-    } catch (IOException e) {
-      throw new AvroBaseException("Failed to create representation", e);
-    }
-  }
-
-  @Override
-  public void init(byte[] representation) throws AvroBaseException {
-    BufferedReader br = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(representation)));
-    try {
-      dir = new File(br.readLine());
-      schemaDir = new File(br.readLine());
-      br.close();
-    } catch (IOException e) {
-      throw new AvroBaseException("Could not read representation", e);
-    }
-    dir.mkdirs();
-    schemaDir.mkdirs();
-  }
-
-  @Override
-  public Iterable<String> scanKeys(final String start, final String end) throws AvroBaseException {
-    return Iterables.transform(Arrays.asList(dir.listFiles(new FilenameFilter() {
-      @Override
-      public boolean accept(File file, String s) {
-        return s.compareTo(start) >= 0 && s.compareTo(end) < 0;
-      }
-    })), new Function<File, String>() {
-      @Override
-      public String apply(@Nullable File input) {
-        return input.getName();
-      }
-    });
-  }
-
-  @Override
   public Row<T, String> get(String row) throws AvroBaseException {
-    ReadWriteLock readWriteLock = getLock(row);
-    Lock lock = readWriteLock.readLock();
-    lock.lock();
+    Lock lock = readLock(row);
     try {
-      File file = new File(dir, row);
-      FileInputStream fis = new FileInputStream(file);
-      FileChannel channel = fis.getChannel();
-      // Lock the file on disk
-      InputStream is = new BufferedInputStream(fis);
-      try {
-        // Read the hash of the schema
-        byte[] bytes = new byte[HASH_LENGTH];
-        int total = 0;
-        int read;
-        while (total != HASH_LENGTH && (read = is.read(bytes, total, HASH_LENGTH - total)) != -1) {
-          total += read;
-        }
-        String hash = new String(bytes);
-        // Read the version of the object
-        bytes = new byte[8];
-        total = 0;
-        while (total != LONG_LENGTH && (read = is.read(bytes, total, LONG_LENGTH - total)) != -1) {
-          total += read;
-        }
-        long version = ByteBuffer.wrap(bytes).getLong();
-        // Get the schema
-        Schema schema = schemaCache.get(hash);
-        if (schema == null) {
-          File schemaFile = new File(schemaDir, hash);
-          schema = Schema.parse(new FileInputStream(schemaFile));
-          schemaCache.put(hash, schema);
-          hashCache.put(schema, hash);
-        }
-        try {
-          DecoderFactory decoderFactory = new DecoderFactory();
-          Decoder d;
-          switch (format) {
-            case JSON:
-              d = decoderFactory.jsonDecoder(schema, is);
-              break;
-            case BINARY:
-            default:
-              d = decoderFactory.binaryDecoder(is, null);
-              break;
-          }
-          // Read the data
-          SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(schema);
-          sdr.setExpected(actualSchema);
-          return new Row<T, String>(sdr.read(null, d), row, version);
-        } catch (IOException e) {
-          throw new AvroBaseException("Failed to read file: " + schema, e);
-        } catch (AvroTypeException e) {
-          throw new AvroBaseException("Failed to read value: " + schema, e);
-        }
-      } finally {
-        channel.close();
-        is.close();
-      }
+      return _get(row);
     } catch (Exception e) {
       throw new AvroBaseException("Failed to get row: " + row, e);
     } finally {
       lock.unlock();
+    }
+  }
+
+  private Lock readLock(String row) {
+    ReadWriteLock readWriteLock = getLock(row);
+    Lock lock = readWriteLock.readLock();
+    lock.lock();
+    return lock;
+  }
+
+  private Row<T, String> _get(String row) throws IOException {
+    File file = new File(dir, row);
+    FileInputStream fis = new FileInputStream(file);
+    FileChannel channel = fis.getChannel();
+    // Lock the file on disk
+    InputStream is = new BufferedInputStream(fis);
+    try {
+      // Read the hash of the schema
+      byte[] bytes = new byte[HASH_LENGTH];
+      int total = 0;
+      int read;
+      while (total != HASH_LENGTH && (read = is.read(bytes, total, HASH_LENGTH - total)) != -1) {
+        total += read;
+      }
+      String hash = new String(bytes);
+      // Read the version of the object
+      bytes = new byte[8];
+      total = 0;
+      while (total != LONG_LENGTH && (read = is.read(bytes, total, LONG_LENGTH - total)) != -1) {
+        total += read;
+      }
+      long version = ByteBuffer.wrap(bytes).getLong();
+      // Get the schema
+      Schema schema = schemaCache.get(hash);
+      if (schema == null) {
+        File schemaFile = new File(schemaDir, hash);
+        schema = Schema.parse(new FileInputStream(schemaFile));
+        schemaCache.put(hash, schema);
+        hashCache.put(schema, hash);
+      }
+      try {
+        DecoderFactory decoderFactory = new DecoderFactory();
+        Decoder d;
+        switch (format) {
+          case JSON:
+            d = decoderFactory.jsonDecoder(schema, is);
+            break;
+          case BINARY:
+          default:
+            d = decoderFactory.binaryDecoder(is, null);
+            break;
+        }
+        // Read the data
+        SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(schema);
+        sdr.setExpected(actualSchema);
+        return new Row<T, String>(sdr.read(null, d), row, version);
+      } catch (IOException e) {
+        throw new AvroBaseException("Failed to read file: " + schema, e);
+      } catch (AvroTypeException e) {
+        throw new AvroBaseException("Failed to read value: " + schema, e);
+      }
+    } finally {
+      channel.close();
+      is.close();
     }
   }
 
@@ -312,22 +273,126 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> imple
 
   @Override
   public void delete(String row) throws AvroBaseException {
-    throw new Error("Not implemented");
+    ReadWriteLock lock = getLock(row);
+    Lock writeLock = lock.writeLock();
+    try {
+      File file = new File(dir, row);
+      FileInputStream fis = new FileInputStream(file);
+      FileChannel channel = fis.getChannel();
+      FileLock fileLock = channel.lock();
+      try {
+        file.delete();
+      } finally {
+        fileLock.release();
+        channel.close();
+        fis.close();
+      }
+    } catch (FileNotFoundException e) {
+      // Already deleted
+    } catch (IOException e) {
+      throw new AvroBaseException("Failed to delete: " + row, e);
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override
-  public Iterable<Row<T, String>> scan(String startRow, String stopRow) throws AvroBaseException {
-    throw new Error("Not implemented");
+  public Iterable<Row<T, String>> scan(final String startRow, final String stopRow) throws AvroBaseException {
+    return transform(asList(dir.listFiles(new FilenameFilter() {
+      @Override
+      public boolean accept(File file, String s) {
+        return (startRow == null || s.compareTo(startRow) >= 0) && (stopRow == null || s.compareTo(stopRow) < 0);
+      }
+    })), new Function<File, Row<T, String>>() {
+      @Override
+      public Row<T, String> apply(@Nullable File input) {
+        return get(input.getName());
+      }
+    });
   }
 
   @Override
   public Row<T, String> mutate(String row, Mutator<T> tMutator) throws AvroBaseException {
-    throw new Error("Not implemented");
+    ReadWriteLock lock = getLock(row);
+    Lock writeLock = lock.writeLock();
+    try {
+      File file = new File(dir, row);
+      FileInputStream fis = new FileInputStream(file);
+      FileChannel channel = fis.getChannel();
+      FileLock fileLock = channel.lock();
+      try {
+        Row<T, String> tStringRow = _get(row);
+        if (tStringRow == null) return null;
+        T mutate = tMutator.mutate(tStringRow.value);
+        if (mutate != null) {
+          put(row, mutate);
+          return new Row<T, String>(mutate, row);
+        }
+        return tStringRow;
+      } finally {
+        fileLock.release();
+        channel.close();
+        fis.close();
+      }
+    } catch (FileNotFoundException e) {
+      return null;
+    } catch (IOException e) {
+      throw new AvroBaseException("Failed to delete: " + row, e);
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   @Override
   public Row<T, String> mutate(String row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
-    throw new Error("Not implemented");
+    ReadWriteLock lock = getLock(row);
+    Lock writeLock = lock.writeLock();
+    File file = new File(dir, row);
+    try {
+      FileInputStream fis = new FileInputStream(file);
+      FileChannel channel = fis.getChannel();
+      FileLock fileLock = channel.lock();
+      try {
+        Row<T, String> tStringRow = _get(row);
+        if (tStringRow == null) return null;
+        T mutate = tMutator.mutate(tStringRow.value);
+        if (mutate != null) {
+          put(row, mutate);
+          return new Row<T, String>(mutate, row);
+        }
+        return tStringRow;
+      } finally {
+        fileLock.release();
+        channel.close();
+        fis.close();
+      }
+    } catch (FileNotFoundException e) {
+      try {
+        if (file.createNewFile()) {
+          FileInputStream fis = new FileInputStream(file);
+          FileChannel channel = fis.getChannel();
+          FileLock fileLock = channel.lock();
+          try {
+            if (file.length() == 0) {
+              T created = tCreator.create();
+              put(row, created);
+              return new Row<T, String>(created, row);
+            }
+          } finally {
+            fileLock.release();
+            channel.close();
+            fis.close();
+          }
+        }
+      } catch (IOException e1) {
+        // Then do a normal mutate
+      }
+      return mutate(row, tMutator);
+    } catch (IOException e) {
+      throw new AvroBaseException("Failed to delete: " + row, e);
+    } finally {
+      writeLock.unlock();
+    }
   }
 
   static final byte[] HEX_CHAR_TABLE = {
