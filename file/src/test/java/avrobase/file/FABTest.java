@@ -1,10 +1,12 @@
 package avrobase.file;
 
-import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
+import avrobase.ReversableFunction;
 import avrobase.Row;
 import bagcheck.User;
+import com.google.common.base.Charsets;
 import com.google.common.base.Supplier;
+import com.google.common.primitives.Longs;
 import org.apache.avro.util.Utf8;
 import org.junit.Test;
 
@@ -32,7 +34,7 @@ import static junit.framework.Assert.assertEquals;
 public class FABTest {
   @Test
   public void putGet() {
-    FAB<User> userRAB = getFAB("");
+    FAB<User, String> userRAB = getFAB("");
     User user = getUser();
     userRAB.put("test", user);
     Row<User, String> test = userRAB.get("test");
@@ -41,36 +43,47 @@ public class FABTest {
 
   @Test
   public void putGet2() {
-    FAB<User> userRAB = getFAB("");
+    FAB<User, String> userRAB = getFAB("");
     User user = getUser();
     Row<User, String> test = userRAB.get("test");
     assertEquals(user, test.value);
   }
 
-  private FAB<User> getFAB(String base) {
-    return new FAB<User>(base + "/tmp/users", base + "/tmp/schemas", new Supplier<String>() {
+  private FAB<User, String> getFAB(String base) {
+    return new FAB<User, String>(base + "/tmp/users", base + "/tmp/schemas", new Supplier<String>() {
       Random random = new SecureRandom();
 
       @Override
       public String get() {
         return String.valueOf(random.nextLong());
       }
-    }, User.SCHEMA$, AvroFormat.BINARY);
+    }, User.SCHEMA$, AvroFormat.BINARY, new ReversableFunction<String, byte[]>() {
+
+      @Override
+      public byte[] apply(String s) {
+        return s.getBytes(Charsets.UTF_8);
+      }
+
+      @Override
+      public String unapply(byte[] bytes) {
+        return new String(bytes, Charsets.UTF_8);
+      }
+    });
   }
 
   @Test
   public void multithreadedContention() throws InterruptedException, IOException {
-    final FAB<User> userRAB = getFAB("");
+    final FAB<User, String> userRAB = getFAB("");
     multithreadedtest(userRAB);
   }
 
   @Test
   public void multithreadedContention2() throws InterruptedException, IOException {
-    final FAB<User> userRAB = getFAB("/Volumes/Data");
+    final FAB<User, String> userRAB = getFAB("/Volumes/Data");
     multithreadedtest(userRAB);
   }
 
-  private void multithreadedtest(final FAB<User> userRAB) throws InterruptedException {
+  private void multithreadedtest(final FAB<User, String> userRAB) throws InterruptedException {
     User user = getUser();
     final List<String> keys = new ArrayList<String>();
     for (int i = 0; i < 100; i++) {
@@ -112,7 +125,7 @@ public class FABTest {
 
   @Test
   public void scantest() {
-    final FAB<User> userRAB = getFAB("/Volumes/Data");
+    final FAB<User, String> userRAB = getFAB("/Volumes/Data");
     int total = 0;
     for (Row<User, String> userStringRow : userRAB.scan(null, null)) {
       total++;

@@ -5,24 +5,23 @@ import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Creator;
 import avrobase.Mutator;
+import avrobase.ReversableFunction;
 import avrobase.Row;
-import com.google.common.base.Function;
 import com.google.common.base.Supplier;
-import com.google.common.collect.Iterables;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
+import org.apache.commons.codec.DecoderException;
+import org.apache.commons.codec.binary.Hex;
 
-import javax.annotation.Nullable;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
@@ -30,14 +29,18 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.util.Arrays;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Queue;
+import java.util.Set;
+import java.util.Stack;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import static com.google.common.collect.Iterables.transform;
-import static java.util.Arrays.asList;
 
 /**
  * File based avrobase.
@@ -46,7 +49,7 @@ import static java.util.Arrays.asList;
  * Date: 10/10/10
  * Time: 4:08 PM
  */
-public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
+public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
   private static final int HASH_LENGTH = 64;
   private static final int LONG_LENGTH = 8;
@@ -54,23 +57,44 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   private File schemaDir;
 
   private final Map<String, ReadWriteLock> locks = new ConcurrentHashMap<String, ReadWriteLock>();
-  private Supplier<String> kg;
+  private Supplier<K> supplier;
+  private ReversableFunction<K, byte[]> transformer;
 
-  public FAB(String directory, String schemaDirectory, Schema actualSchema, AvroFormat format) {
+  public FAB(String directory, String schemaDirectory, Supplier<K> supplier, Schema actualSchema, AvroFormat format, ReversableFunction<K, byte[]> transformer) {
     super(actualSchema, format);
     dir = new File(directory);
     dir.mkdirs();
     schemaDir = new File(schemaDirectory);
     schemaDir.mkdirs();
+    this.supplier = supplier;
+    this.transformer = transformer;
   }
 
-  public FAB(String directory, String schemaDirectory, Supplier<String> kg, Schema actualSchema, AvroFormat format) {
-    this(directory, schemaDirectory, actualSchema, format);
-    this.kg = kg;
+  private String toFile(K row) {
+    StringBuilder sb = new StringBuilder();
+    String s = toString(row);
+    if (s.length() > 2) {
+      sb.append(s.substring(0, 2));
+      sb.append("/");
+      if (s.length() > 4) {
+        sb.append(s.substring(2, 4));
+        sb.append("/").append(s.substring(4));
+      } else {
+        sb.append(s.substring(2));
+      }
+      s = sb.toString();
+    }
+    return s;
   }
+
+  private String toString(K row) {
+    byte[] bytes = transformer.apply(row);
+    return Hex.encodeHexString(bytes);
+  }
+
 
   @Override
-  public Row<T, String> get(String row) throws AvroBaseException {
+  public Row<T, K> get(K row) throws AvroBaseException {
     Lock lock = readLock(row);
     try {
       return _get(row);
@@ -81,15 +105,15 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
     }
   }
 
-  private Lock readLock(String row) {
-    ReadWriteLock readWriteLock = getLock(row);
+  private Lock readLock(K row) {
+    ReadWriteLock readWriteLock = getLock(toString(row));
     Lock lock = readWriteLock.readLock();
     lock.lock();
     return lock;
   }
 
-  private Row<T, String> _get(String row) throws IOException {
-    File file = new File(dir, row);
+  private Row<T, K> _get(K row) throws IOException {
+    File file = getFile(row, false);
     FileInputStream fis = new FileInputStream(file);
     FileChannel channel = fis.getChannel();
     // Lock the file on disk
@@ -133,7 +157,7 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
         // Read the data
         SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(schema);
         sdr.setExpected(actualSchema);
-        return new Row<T, String>(sdr.read(null, d), row, version);
+        return new Row<T, K>(sdr.read(null, d), row, version);
       } catch (IOException e) {
         throw new AvroBaseException("Failed to read file: " + schema, e);
       } catch (AvroTypeException e) {
@@ -145,33 +169,45 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
     }
   }
 
-  private ReadWriteLock getLock(String row) {
+  private Set<File> madedirs = new ConcurrentSkipListSet<File>();
+
+  private File getFile(K row, boolean mkdirs) {
+    File file = new File(dir, toFile(row));
+    if (mkdirs) {
+      File parentFile = file.getParentFile();
+      if (!madedirs.contains(parentFile)) {
+        madedirs.add(parentFile);
+        parentFile.mkdirs();
+      }
+    }
+    return file;
+  }
+
+  private ReadWriteLock getLock(String lockKey) {
     ReadWriteLock readWriteLock;
     synchronized (locks) {
-      readWriteLock = locks.get(row);
+      readWriteLock = locks.get(lockKey);
       if (readWriteLock == null) {
         readWriteLock = new ReentrantReadWriteLock();
-        locks.put(row, readWriteLock);
+        locks.put(lockKey, readWriteLock);
       }
     }
     return readWriteLock;
   }
 
   @Override
-  public String create(T value) throws AvroBaseException {
-    if (kg == null) throw new AvroBaseException("No key generator provided");
-    String row = kg.get();
+  public K create(T value) throws AvroBaseException {
+    if (supplier == null) throw new AvroBaseException("No key generator provided");
+    K row = supplier.get();
     put(row, value);
     return row;
   }
 
   @Override
-  public void put(String row, T value) throws AvroBaseException {
-    ReadWriteLock readWriteLock = getLock(row);
-    Lock lock = readWriteLock.writeLock();
-    lock.lock();
+  public void put(K row, T value) throws AvroBaseException {
+    Lock lock = writeLock(row);
     try {
-      File file = new File(dir, row);
+      File file = getFile(row, true);
       RandomAccessFile raf = new RandomAccessFile(file, "rw");
       FileChannel channel = raf.getChannel();
       FileLock fileLock = channel.lock();
@@ -215,13 +251,18 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
     }
   }
 
-  @Override
-  public boolean put(String row, T value, long version) throws AvroBaseException {
-    ReadWriteLock readWriteLock = getLock(row);
+  private Lock writeLock(K row) {
+    ReadWriteLock readWriteLock = getLock(toString(row));
     Lock lock = readWriteLock.writeLock();
     lock.lock();
+    return lock;
+  }
+
+  @Override
+  public boolean put(K row, T value, long version) throws AvroBaseException {
+    Lock lock = writeLock(row);
     try {
-      File file = new File(dir, row);
+      File file = getFile(row, true);
       if (version != 0 && !file.exists()) return false;
       if (version == 0 && file.exists()) return false;
       RandomAccessFile raf = new RandomAccessFile(file, "rw");
@@ -272,11 +313,10 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   }
 
   @Override
-  public void delete(String row) throws AvroBaseException {
-    ReadWriteLock lock = getLock(row);
-    Lock writeLock = lock.writeLock();
+  public void delete(K row) throws AvroBaseException {
+    Lock writeLock = writeLock(row);
     try {
-      File file = new File(dir, row);
+      File file = getFile(row, false);
       FileInputStream fis = new FileInputStream(file);
       FileChannel channel = fis.getChannel();
       FileLock fileLock = channel.lock();
@@ -297,36 +337,101 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   }
 
   @Override
-  public Iterable<Row<T, String>> scan(final String startRow, final String stopRow) throws AvroBaseException {
-    return transform(asList(dir.listFiles(new FilenameFilter() {
+  public Iterable<Row<T, K>> scan(final K startRow, final K stopRow) throws AvroBaseException {
+    final String start = startRow == null ? null : Hex.encodeHexString(transformer.apply(startRow));
+    final String stop = stopRow == null ? null : Hex.encodeHexString(transformer.apply(stopRow));
+    return new Iterable<Row<T, K>>() {
       @Override
-      public boolean accept(File file, String s) {
-        return (startRow == null || s.compareTo(startRow) >= 0) && (stopRow == null || s.compareTo(stopRow) < 0);
+      public Iterator<Row<T, K>> iterator() {
+        return new Iterator<Row<T, K>>() {
+          Queue<File> queue = createFileQueue(dir);
+          Stack<Queue<File>> stack = new Stack<Queue<File>>();
+          Stack<String> path = new Stack<String>();
+          Row<T, K> current;
+
+          @Override
+          public synchronized boolean hasNext() {
+            if (current != null) return true;
+            do {
+              File peek = queue.peek();
+              if (peek == null) {
+                if (stack.size() > 0) {
+                  queue = stack.pop();
+                  path.pop();
+                  return hasNext();
+                }
+                return false;
+              }
+              File file = queue.poll();
+              if (start != null || stop != null) {
+                String p = getPath(file).toString();
+                if (!include(p, start, stop)) continue;
+              }
+              if (file.isDirectory()) {
+                path.push(file.getName());
+                stack.push(queue);
+                queue = createFileQueue(file);
+              } else {
+                StringBuilder sb = getPath(file);
+                try {
+                  current = get(transformer.unapply(Hex.decodeHex(sb.toString().toCharArray())));
+                  return current != null || hasNext();
+                } catch (DecoderException e) {
+                  throw new AvroBaseException("Corrupt file system: " + file, e);
+                }
+              }
+            } while (true);
+          }
+
+          private StringBuilder getPath(File file) {
+            StringBuilder sb = new StringBuilder();
+            for (String s : path) {
+              sb.append(s);
+            }
+            sb.append(file.getName());
+            return sb;
+          }
+
+          @Override
+          public Row<T, K> next() {
+            if (current == null) hasNext();
+            if (current == null) throw new NoSuchElementException();
+            Row<T, K> tmp = current;
+            current = null;
+            return tmp;
+          }
+
+          @Override
+          public void remove() {
+          }
+        };
       }
-    })), new Function<File, Row<T, String>>() {
-      @Override
-      public Row<T, String> apply(@Nullable File input) {
-        return get(input.getName());
-      }
-    });
+    };
+  }
+
+  private LinkedList<File> createFileQueue(File startdir) {
+    return new LinkedList<File>(Arrays.asList(startdir.listFiles()));
+  }
+
+  private boolean include(String s, String startRow, String stopRow) {
+    return (startRow == null || s.compareTo(startRow) >= 0) && (stopRow == null || s.compareTo(stopRow) < 0);
   }
 
   @Override
-  public Row<T, String> mutate(String row, Mutator<T> tMutator) throws AvroBaseException {
-    ReadWriteLock lock = getLock(row);
-    Lock writeLock = lock.writeLock();
+  public Row<T, K> mutate(K row, Mutator<T> tMutator) throws AvroBaseException {
+    Lock writeLock = writeLock(row);
     try {
-      File file = new File(dir, row);
+      File file = getFile(row, true);
       FileInputStream fis = new FileInputStream(file);
       FileChannel channel = fis.getChannel();
       FileLock fileLock = channel.lock();
       try {
-        Row<T, String> tStringRow = _get(row);
+        Row<T, K> tStringRow = _get(row);
         if (tStringRow == null) return null;
         T mutate = tMutator.mutate(tStringRow.value);
         if (mutate != null) {
           put(row, mutate);
-          return new Row<T, String>(mutate, row);
+          return new Row<T, K>(mutate, row);
         }
         return tStringRow;
       } finally {
@@ -344,21 +449,20 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
   }
 
   @Override
-  public Row<T, String> mutate(String row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
-    ReadWriteLock lock = getLock(row);
-    Lock writeLock = lock.writeLock();
-    File file = new File(dir, row);
+  public Row<T, K> mutate(K row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
+    Lock writeLock = writeLock(row);
+    File file = getFile(row, true);
     try {
       FileInputStream fis = new FileInputStream(file);
       FileChannel channel = fis.getChannel();
       FileLock fileLock = channel.lock();
       try {
-        Row<T, String> tStringRow = _get(row);
+        Row<T, K> tStringRow = _get(row);
         if (tStringRow == null) return null;
         T mutate = tMutator.mutate(tStringRow.value);
         if (mutate != null) {
           put(row, mutate);
-          return new Row<T, String>(mutate, row);
+          return new Row<T, K>(mutate, row);
         }
         return tStringRow;
       } finally {
@@ -376,7 +480,7 @@ public class FAB<T extends SpecificRecord> extends AvroBaseImpl<T, String> {
             if (file.length() == 0) {
               T created = tCreator.create();
               put(row, created);
-              return new Row<T, String>(created, row);
+              return new Row<T, K>(created, row);
             }
           } finally {
             fileLock.release();
