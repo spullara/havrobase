@@ -133,6 +133,15 @@ public class FABTest {
     System.out.println(total);
   }
 
+  @Test
+  public void halfscantest() {
+    final FAB<User, String> userRAB = getFAB("/Volumes/Data");
+    int total = 0;
+    for (Row<User, String> userStringRow : userRAB.scan("0", null)) {
+      total++;
+    }
+    System.out.println(total);
+  }
 
   private User getUser() {
     User user = new User();

@@ -8,6 +8,7 @@ import avrobase.Mutator;
 import avrobase.ReversableFunction;
 import avrobase.Row;
 import com.google.common.base.Supplier;
+import jinahya.rfc4648.Base32HEX;
 import org.apache.avro.AvroTypeException;
 import org.apache.avro.Schema;
 import org.apache.avro.io.Decoder;
@@ -18,6 +19,7 @@ import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -55,6 +57,7 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   private static final int LONG_LENGTH = 8;
   private File dir;
   private File schemaDir;
+  private final Base32HEX base32hex = new Base32HEX();
 
   private final Map<String, ReadWriteLock> locks = new ConcurrentHashMap<String, ReadWriteLock>();
   private Supplier<K> supplier;
@@ -88,8 +91,13 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   }
 
   private String toString(K row) {
+    if (row == null) return null;
     byte[] bytes = transformer.apply(row);
-    return Hex.encodeHexString(bytes);
+    try {
+      return new String(base32hex.encode(bytes));
+    } catch (IOException e) {
+      throw new AvroBaseException("Could not encode");
+    }
   }
 
 
@@ -224,7 +232,9 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
             schemaOs.close();
           }
         }
-        raf.write(hash.getBytes());
+        File tmp = new File(file.toPath() + ".tmp");
+        BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(tmp));
+        bos.write(hash.getBytes());
         long version = 1;
         if (file.exists()) {
           byte[] bytes = new byte[8];
@@ -236,8 +246,10 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
           version = ByteBuffer.wrap(bytes).getLong() + 1;
           raf.seek(HASH_LENGTH);
         }
-        raf.write(ByteBuffer.wrap(new byte[8]).putLong(version).array());
-        raf.write(serialize(value));
+        bos.write(ByteBuffer.wrap(new byte[8]).putLong(version).array());
+        bos.write(serialize(value));
+        bos.close();
+        tmp.renameTo(file);
       } finally {
         channel.force(false);
         fileLock.release();
@@ -294,11 +306,13 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
             schemaOs.close();
           }
         }
-        raf.seek(0);
-        raf.write(hash.getBytes());
-        raf.write(ByteBuffer.wrap(new byte[8]).putLong(version + 1).array());
-        raf.write(serialize(value));
-        return true;
+        File tmp = new File(file.toPath() + ".tmp");
+        BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(tmp));
+        bos.write(hash.getBytes());
+        bos.write(ByteBuffer.wrap(new byte[8]).putLong(version + 1).array());
+        bos.write(serialize(value));
+        bos.close();
+        return tmp.renameTo(file);
       } finally {
         channel.force(false);
         fileLock.release();
@@ -338,8 +352,8 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
   @Override
   public Iterable<Row<T, K>> scan(final K startRow, final K stopRow) throws AvroBaseException {
-    final String start = startRow == null ? null : Hex.encodeHexString(transformer.apply(startRow));
-    final String stop = stopRow == null ? null : Hex.encodeHexString(transformer.apply(stopRow));
+    final String start = toString(startRow);
+    final String stop = toString(stopRow);
     return new Iterable<Row<T, K>>() {
       @Override
       public Iterator<Row<T, K>> iterator() {
@@ -374,9 +388,9 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
               } else {
                 StringBuilder sb = getPath(file);
                 try {
-                  current = get(transformer.unapply(Hex.decodeHex(sb.toString().toCharArray())));
+                  current = get(transformer.unapply(base32hex.decode(sb.toString().toCharArray())));
                   return current != null || hasNext();
-                } catch (DecoderException e) {
+                } catch (IOException e) {
                   throw new AvroBaseException("Corrupt file system: " + file, e);
                 }
               }
@@ -414,7 +428,7 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
   }
 
   private boolean include(String s, String startRow, String stopRow) {
-    return (startRow == null || s.compareTo(startRow) >= 0) && (stopRow == null || s.compareTo(stopRow) < 0);
+    return !s.endsWith(".tmp") && (startRow == null || s.compareTo(startRow) >= 0) && (stopRow == null || s.compareTo(stopRow) < 0);
   }
 
   @Override
@@ -497,25 +511,6 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
     } finally {
       writeLock.unlock();
     }
-  }
-
-  static final byte[] HEX_CHAR_TABLE = {
-      (byte) '0', (byte) '1', (byte) '2', (byte) '3',
-      (byte) '4', (byte) '5', (byte) '6', (byte) '7',
-      (byte) '8', (byte) '9', (byte) 'a', (byte) 'b',
-      (byte) 'c', (byte) 'd', (byte) 'e', (byte) 'f'
-  };
-
-  public static String getHexString(byte[] raw) {
-    byte[] hex = new byte[2 * raw.length];
-    int index = 0;
-
-    for (byte b : raw) {
-      int v = b & 0xFF;
-      hex[index++] = HEX_CHAR_TABLE[v >>> 4];
-      hex[index++] = HEX_CHAR_TABLE[v & 0xF];
-    }
-    return new String(hex);
   }
 
 }
