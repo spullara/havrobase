@@ -1,0 +1,26 @@
+    {
+      "type":"record",
+      "name":"Beacon",
+      "fields":[
+        {
+          "name":"browser",
+          "type":["null", "string"],
+          "doc":"Unique browser cookie"
+        },
+        {
+          "name":"login",
+          "type":["null", "string"],
+          "doc":"Unique login cookie"
+        },
+        {
+          "name":"useragent",
+          "type":["null", "string"],
+          "doc":"User agent id"
+        },
+        {
+          "name":"parameters",
+          "type":{"type":"map", "values":"string"},
+          "doc":"Query parameters on the beacon"
+        }
+      ]
+    }
