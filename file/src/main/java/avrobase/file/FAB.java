@@ -232,7 +232,7 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
             schemaOs.close();
           }
         }
-        File tmp = new File(file.toPath() + ".tmp");
+        File tmp = new File(file.getCanonicalPath() + ".tmp");
         BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(tmp));
         bos.write(hash.getBytes());
         long version = 1;
@@ -306,7 +306,7 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
             schemaOs.close();
           }
         }
-        File tmp = new File(file.toPath() + ".tmp");
+        File tmp = new File(file.getCanonicalPath() + ".tmp");
         BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(tmp));
         bos.write(hash.getBytes());
         bos.write(ByteBuffer.wrap(new byte[8]).putLong(version + 1).array());
