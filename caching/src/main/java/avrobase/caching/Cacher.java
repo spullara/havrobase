@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Cache the results of an avrobase and also send out messages to listneres when one is updated.
@@ -21,6 +22,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * Time: 1:37 PM
  */
 public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K> {
+
+  private AtomicLong miss = new AtomicLong(0);
+  private AtomicLong hit = new AtomicLong(0);
+  private AtomicLong inv = new AtomicLong(0);
+
   private final KeyMaker<K> keyMaker;
 
   public static interface Listener<K> {
@@ -45,6 +51,7 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
   }
 
   private void invalidate(K row) {
+    inv.incrementAndGet();
     for (Listener<K> listener : listeners) {
       listener.invalidate(row);
     }
@@ -58,14 +65,22 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
   }
 
   @Override
+  public K create(T value) throws AvroBaseException {
+    K k = super.create(value);
+    cache.put(keyMaker.make(k), new Row<T, K>(value, k));
+    return k;
+  }
+
+  @Override
   public Row<T, K> get(K row) throws AvroBaseException {
     Object key = keyMaker.make(row);
     Row<T, K> tkRow = cache.get(key);
     if (tkRow == null) {
+      miss.incrementAndGet();
       tkRow = super.get(row);
       cache.put(key, tkRow);
       invalidate(row);
-    }
+    } else hit.incrementAndGet();
     return tkRow;
   }
 
@@ -137,5 +152,11 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
         };
       }
     };
+  }
+
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{\"hits\":").append(hit).append(",\"miss\":").append(miss).append(",\"inv\":").append(inv).append("}");
+    return sb.toString();
   }
 }

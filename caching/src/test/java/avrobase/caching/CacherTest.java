@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Random;
 
 import static junit.framework.Assert.assertEquals;
+import static junit.framework.Assert.assertTrue;
 
 /**
  * Caching test.
@@ -28,41 +29,21 @@ public class CacherTest {
 
   @Test
   public void cachingtest() {
+
+
     FAB<Beacon, byte[]> beaconFAB = new FAB<Beacon, byte[]>("/tmp/cachingtest/beacons", "/tmp/cachingtest/schemas", new Supplier<byte[]>() {
       @Override
       public byte[] get() {
         return Longs.toByteArray(r.nextLong());
       }
     }, Beacon.SCHEMA$, AvroFormat.BINARY, null);
-    Cacher<Beacon, byte[]> beaconCacher = new Cacher<Beacon, byte[]>(beaconFAB, new Cacher.KeyMaker<byte[]>() {
+    Cacher.KeyMaker<byte[]> keyMaker = new Cacher.KeyMaker<byte[]>() {
       public Object make(final byte[] key) {
-        return new Object() {
-          @Override
-          public boolean equals(Object o) {
-            if (o instanceof byte[]) {
-              byte[] other = (byte[]) o;
-              if (key.length == other.length) {
-                int i = 0;
-                for (byte b : key) {
-                  if (b == other[i++]) return false;
-                }
-                return true;
-              }
-            }
-            return false;    //To change body of overridden methods use File | Settings | File Templates.
-          }
-
-          @Override
-          public int hashCode() {
-            int hashcode = 0;
-            for (int i = 0; i < key.length; i++) {
-              hashcode += key[i] + hashcode * 43;
-            }
-            return hashcode;
-          }
-        };
+        return new BytesKey(key);
       }
-    });
+    };
+    assertTrue(keyMaker.make(new byte[4]).equals(keyMaker.make(new byte[4])));
+    Cacher<Beacon, byte[]> beaconCacher = new Cacher<Beacon, byte[]>(beaconFAB, keyMaker);
     int total = 0;
     for (Row<Beacon, byte[]> beaconRow: beaconCacher.scan(null, null)){
       beaconCacher.delete(beaconRow.row);
@@ -99,6 +80,42 @@ public class CacherTest {
       }
       long end = System.currentTimeMillis();
       System.out.println(end - start);
+    }
+    System.out.println(beaconCacher);
+  }
+
+  private static class BytesKey {
+    private final byte[] key;
+
+    public BytesKey(byte[] key) {
+      this.key = key;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o instanceof BytesKey) {
+        BytesKey other = (BytesKey) o;
+        byte[] otherkey = other.key;
+        if (key.length == otherkey.length) {
+          int i = 0;
+          for (byte b : key) {
+            if (b != otherkey[i++]) {
+              return false;
+            }
+          }
+          return true;
+        }
+      }
+      return false;    //To change body of overridden methods use File | Settings | File Templates.
+    }
+
+    @Override
+    public int hashCode() {
+      int hashcode = 0;
+      for (byte aKey : key) {
+        hashcode += aKey + hashcode * 43;
+      }
+      return hashcode;
     }
   }
 }
