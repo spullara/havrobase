@@ -21,6 +21,7 @@
     <module>file</module>
     <module>handlersocket</module>
     <module>s3archive</module>
+    <module>caching</module>
   </modules>
   <packaging>pom</packaging>
 

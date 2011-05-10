@@ -15,8 +15,6 @@ import org.apache.avro.io.Decoder;
 import org.apache.avro.io.DecoderFactory;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificRecord;
-import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Hex;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -70,7 +68,17 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
     schemaDir = new File(schemaDirectory);
     schemaDir.mkdirs();
     this.supplier = supplier;
-    this.transformer = transformer;
+    this.transformer = transformer == null ? new ReversableFunction<K, byte[]>() {
+      @Override
+      public byte[] apply(K k) {
+        return (byte[]) k;
+      }
+
+      @Override
+      public K unapply(byte[] bytes) {
+        return (K) bytes;
+      }
+    } : transformer;
   }
 
   private String toFile(K row) {
@@ -331,15 +339,15 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
     Lock writeLock = writeLock(row);
     try {
       File file = getFile(row, false);
-      FileInputStream fis = new FileInputStream(file);
-      FileChannel channel = fis.getChannel();
+      RandomAccessFile raf = new RandomAccessFile(file, "rw");
+      FileChannel channel = raf.getChannel();
       FileLock fileLock = channel.lock();
       try {
         file.delete();
       } finally {
         fileLock.release();
         channel.close();
-        fis.close();
+        raf.close();
       }
     } catch (FileNotFoundException e) {
       // Already deleted
