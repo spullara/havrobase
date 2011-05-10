@@ -76,8 +76,9 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
     Object key = keyMaker.make(row);
     Row<T, K> tkRow = cache.get(key);
     if (tkRow == null) {
-      miss.incrementAndGet();
       tkRow = super.get(row);
+      if (tkRow == null) return null;
+      miss.incrementAndGet();
       cache.put(key, tkRow);
       invalidate(row);
     } else hit.incrementAndGet();

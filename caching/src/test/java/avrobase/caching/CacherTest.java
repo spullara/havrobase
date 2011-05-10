@@ -34,7 +34,7 @@ public class CacherTest {
     FAB<Beacon, byte[]> beaconFAB = new FAB<Beacon, byte[]>("/tmp/cachingtest/beacons", "/tmp/cachingtest/schemas", new Supplier<byte[]>() {
       @Override
       public byte[] get() {
-        return Longs.toByteArray(r.nextLong());
+        return Longs.toByteArray(r.nextLong() % 100000);
       }
     }, Beacon.SCHEMA$, AvroFormat.BINARY, null);
     Cacher.KeyMaker<byte[]> keyMaker = new Cacher.KeyMaker<byte[]>() {
@@ -64,7 +64,6 @@ public class CacherTest {
     for (Row<Beacon, byte[]> beaconRow: beaconCacher.scan(null, null)){
       total++;
     }
-    assertEquals(1000, total);
     {
       long start = System.currentTimeMillis();
       for (int i = 0; i < 10000; i++) {
@@ -77,6 +76,14 @@ public class CacherTest {
       long start = System.currentTimeMillis();
       for (int i = 0; i < 10000; i++) {
         beaconCacher.get(rows.get(r.nextInt(rows.size())));
+      }
+      long end = System.currentTimeMillis();
+      System.out.println(end - start);
+    }
+    {
+      long start = System.currentTimeMillis();
+      for (int i = 0; i < 10000; i++) {
+        beaconCacher.get(Longs.toByteArray(r.nextLong() % 100000));
       }
       long end = System.currentTimeMillis();
       System.out.println(end - start);
@@ -106,7 +113,7 @@ public class CacherTest {
           return true;
         }
       }
-      return false;    //To change body of overridden methods use File | Settings | File Templates.
+      return false;
     }
 
     @Override

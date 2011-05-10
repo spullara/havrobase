@@ -130,6 +130,7 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
   private Row<T, K> _get(K row) throws IOException {
     File file = getFile(row, false);
+    if (!file.exists()) return null;
     FileInputStream fis = new FileInputStream(file);
     FileChannel channel = fis.getChannel();
     // Lock the file on disk
@@ -380,7 +381,7 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
                 if (stack.size() > 0) {
                   queue = stack.pop();
                   path.pop();
-                  return hasNext();
+                  continue;
                 }
                 return false;
               }
@@ -397,7 +398,9 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
                 StringBuilder sb = getPath(file);
                 try {
                   current = get(transformer.unapply(base32hex.decode(sb.toString().toCharArray())));
-                  return current != null || hasNext();
+                  if(current != null) {
+                    return true;
+                  }
                 } catch (IOException e) {
                   throw new AvroBaseException("Corrupt file system: " + file, e);
                 }
