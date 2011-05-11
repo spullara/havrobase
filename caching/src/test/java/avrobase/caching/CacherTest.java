@@ -29,8 +29,6 @@ public class CacherTest {
 
   @Test
   public void cachingtest() {
-
-
     FAB<Beacon, byte[]> beaconFAB = new FAB<Beacon, byte[]>("/tmp/cachingtest/beacons", "/tmp/cachingtest/schemas", new Supplier<byte[]>() {
       @Override
       public byte[] get() {
@@ -82,7 +80,7 @@ public class CacherTest {
     }
     {
       long start = System.currentTimeMillis();
-      for (int i = 0; i < 10000; i++) {
+      for (int i = 0; i < 100000; i++) {
         beaconCacher.get(Longs.toByteArray(r.nextLong() % 100000));
       }
       long end = System.currentTimeMillis();

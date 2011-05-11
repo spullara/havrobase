@@ -160,4 +160,8 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
     sb.append("{\"hits\":").append(hit).append(",\"miss\":").append(miss).append(",\"inv\":").append(inv).append("}");
     return sb.toString();
   }
+
+  public void invalidate() {
+    cache.clear();
+  }
 }
