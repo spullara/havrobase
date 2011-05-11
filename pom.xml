@@ -22,6 +22,7 @@
     <module>handlersocket</module>
     <module>s3archive</module>
     <module>caching</module>
+    <module>gae</module>
   </modules>
   <packaging>pom</packaging>
 
