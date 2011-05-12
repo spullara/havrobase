@@ -89,38 +89,4 @@ public class CacherTest {
     System.out.println(beaconCacher);
   }
 
-  private static class BytesKey {
-    private final byte[] key;
-
-    public BytesKey(byte[] key) {
-      this.key = key;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (o instanceof BytesKey) {
-        BytesKey other = (BytesKey) o;
-        byte[] otherkey = other.key;
-        if (key.length == otherkey.length) {
-          int i = 0;
-          for (byte b : key) {
-            if (b != otherkey[i++]) {
-              return false;
-            }
-          }
-          return true;
-        }
-      }
-      return false;
-    }
-
-    @Override
-    public int hashCode() {
-      int hashcode = 0;
-      for (byte aKey : key) {
-        hashcode += aKey + hashcode * 43;
-      }
-      return hashcode;
-    }
-  }
 }
