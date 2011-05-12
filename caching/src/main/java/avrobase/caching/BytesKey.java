@@ -1,5 +1,7 @@
 package avrobase.caching;
 
+import java.io.Serializable;
+
 /**
 * TODO: Edit this
 * <p/>
@@ -7,7 +9,7 @@ package avrobase.caching;
 * Date: 5/11/11
 * Time: 7:15 PM
 */
-public class BytesKey {
+public class BytesKey implements Serializable {
   private final byte[] key;
 
   public BytesKey(byte[] key) {

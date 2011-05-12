@@ -17,12 +17,10 @@
     <module>memcached</module>
     <module>mysql</module>
     <module>redis</module>
-    <module>sharded</module>
     <module>file</module>
     <module>handlersocket</module>
     <module>s3archive</module>
     <module>caching</module>
-    <module>gae</module>
   </modules>
   <packaging>pom</packaging>
 

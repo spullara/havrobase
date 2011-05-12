@@ -6,6 +6,8 @@ import avrobase.data.Beacon;
 import avrobase.file.FAB;
 import com.google.common.base.Supplier;
 import com.google.common.primitives.Longs;
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
 import org.junit.Test;
 
 import java.security.SecureRandom;
@@ -41,7 +43,10 @@ public class CacherTest {
       }
     };
     assertTrue(keyMaker.make(new byte[4]).equals(keyMaker.make(new byte[4])));
-    Cacher<Beacon, byte[]> beaconCacher = new Cacher<Beacon, byte[]>(beaconFAB, keyMaker);
+    CacheManager cm = CacheManager.create();
+    Cache cache = new Cache("test", 10000, false, true, -1, -1);
+    Cacher<Beacon, byte[]> beaconCacher = new Cacher<Beacon, byte[]>(beaconFAB, keyMaker, cache);
+    cm.addCache(cache);
     int total = 0;
     for (Row<Beacon, byte[]> beaconRow: beaconCacher.scan(null, null)){
       beaconCacher.delete(beaconRow.row);

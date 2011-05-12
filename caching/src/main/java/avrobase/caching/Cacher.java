@@ -6,6 +6,10 @@ import avrobase.Creator;
 import avrobase.ForwardingAvroBase;
 import avrobase.Mutator;
 import avrobase.Row;
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
+import net.sf.ehcache.config.CacheConfiguration;
 import org.apache.avro.specific.SpecificRecord;
 
 import java.util.ArrayList;
@@ -23,10 +27,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K> {
 
-  private AtomicLong miss = new AtomicLong(0);
-  private AtomicLong hit = new AtomicLong(0);
-  private AtomicLong inv = new AtomicLong(0);
-
   private final KeyMaker<K> keyMaker;
 
   public static interface Listener<K> {
@@ -37,11 +37,12 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
     Object make(K key);
   }
 
-  private ConcurrentHashMap<Object, Row<T, K>> cache = new ConcurrentHashMap<Object, Row<T, K>>();
+  private Cache cache;
 
-  public Cacher(AvroBase<T, K> delegate, KeyMaker<K> keyMaker) {
+  public Cacher(AvroBase<T, K> delegate, KeyMaker<K> keyMaker, Cache cache) {
     super(delegate);
     this.keyMaker = keyMaker;
+    this.cache = cache;
   }
 
   private List<Listener<K>> listeners = new ArrayList<Listener<K>>();
@@ -51,7 +52,6 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
   }
 
   private void invalidate(K row) {
-    inv.incrementAndGet();
     for (Listener<K> listener : listeners) {
       listener.invalidate(row);
     }
@@ -67,21 +67,23 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
   @Override
   public K create(T value) throws AvroBaseException {
     K k = super.create(value);
-    cache.put(keyMaker.make(k), new Row<T, K>(value, k));
+    Row<T, K> tkRow = new Row<T, K>(value, k);
+    cache.put(new Element(keyMaker.make(k), tkRow));
     return k;
   }
 
   @Override
   public Row<T, K> get(K row) throws AvroBaseException {
     Object key = keyMaker.make(row);
-    Row<T, K> tkRow = cache.get(key);
-    if (tkRow == null) {
+    Element element = cache.get(key);
+    Row<T, K> tkRow;
+    if (element == null) {
       tkRow = super.get(row);
-      if (tkRow == null) return null;
-      miss.incrementAndGet();
-      cache.put(key, tkRow);
+      cache.put(new Element(key, tkRow));
       invalidate(row);
-    } else hit.incrementAndGet();
+    } else {
+      tkRow = (Row<T, K>) element.getValue();
+    }
     return tkRow;
   }
 
@@ -92,7 +94,7 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
     if (mutate == null) {
       cache.remove(key);
     } else {
-      cache.put(key, mutate);
+      cache.put(new Element(key, mutate));
     }
     invalidate(row);
     return mutate;
@@ -105,7 +107,7 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
     if (mutate == null) {
       cache.remove(key);
     } else {
-      cache.put(key, mutate);
+      cache.put(new Element(key, mutate));
     }
     invalidate(row);
     return mutate;
@@ -114,14 +116,14 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
   @Override
   public void put(K row, T value) throws AvroBaseException {
     super.put(row, value);
-    cache.put(keyMaker.make(row), new Row<T, K>(value, row));
+    cache.put(new Element(keyMaker.make(row), new Row<T, K>(value, row)));
     invalidate(row);
   }
 
   @Override
   public boolean put(K row, T value, long version) throws AvroBaseException {
     boolean put = super.put(row, value, version);
-    cache.put(keyMaker.make(row), new Row<T, K>(value, row, version));
+    cache.put(new Element(keyMaker.make(row), new Row<T, K>(value, row, version)));
     invalidate(row);
     return put;
   }
@@ -142,7 +144,7 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
           @Override
           public Row<T, K> next() {
             Row<T, K> next = iterator.next();
-            cache.put(keyMaker.make(next.row), next);
+            cache.put(new Element(keyMaker.make(next.row), next));
             invalidate(next.row);
             return next;
           }
@@ -155,13 +157,7 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
     };
   }
 
-  public String toString() {
-    StringBuilder sb = new StringBuilder();
-    sb.append("{\"hits\":").append(hit).append(",\"miss\":").append(miss).append(",\"inv\":").append(inv).append("}");
-    return sb.toString();
-  }
-
   public void invalidate() {
-    cache.clear();
+    cache.flush();
   }
 }
