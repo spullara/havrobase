@@ -82,7 +82,8 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
       cache.put(new Element(key, tkRow));
       invalidate(row);
     } else {
-      tkRow = (Row<T, K>) element.getValue();
+      // TODO: until we offer immutable rows, clone the result
+      tkRow = ((Row<T, K>) element.getValue()).clone();
     }
     return tkRow;
   }
