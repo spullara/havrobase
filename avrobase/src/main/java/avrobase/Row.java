@@ -14,7 +14,6 @@ import java.io.Externalizable;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
-import java.io.Serializable;
 
 /**
  * Row value wrapper for the associated metadata.  Wouldn't Java be great if you could add metadata to any instance
@@ -24,7 +23,7 @@ import java.io.Serializable;
  * Date: Jun 9, 2010
  * Time: 12:07:47 PM
  */
-public class Row<T extends SpecificRecord, K> implements Externalizable {
+public class Row<T extends SpecificRecord, K> implements Externalizable, Cloneable {
 
   private static EncoderFactory encoderFactory = new EncoderFactory();
   private static DecoderFactory decoderFactory = new DecoderFactory();
@@ -56,6 +55,11 @@ public class Row<T extends SpecificRecord, K> implements Externalizable {
   @Override
   public int hashCode() {
     return value != null ? value.hashCode() : 0;
+  }
+
+  @Override
+  public String toString() {
+    return "[" + row + ", " + version + ", " + value + "]";
   }
 
   public void writeExternal(ObjectOutput objectOutput) throws IOException {
@@ -92,5 +96,20 @@ public class Row<T extends SpecificRecord, K> implements Externalizable {
     Decoder d = decoderFactory.binaryDecoder(bytes, 0, bytes.length, null);
     SpecificDatumReader<T> sdr = new SpecificDatumReader<T>(schema);
     value = sdr.read(null, d);
+  }
+
+  public Row<T, K> clone() {
+    Schema schema = value.getSchema();
+    T newvalue = null;
+    try {
+      newvalue = (T) Class.forName(schema.getFullName()).newInstance();
+    } catch (Exception e) {
+      throw new AvroBaseException("Could not clone row", e);
+    }
+    for (Schema.Field field : schema.getFields()) {
+      int pos = field.pos();
+      newvalue.put(pos, value.get(pos));
+    }
+    return new Row<T, K>(newvalue, row, version);
   }
 }
