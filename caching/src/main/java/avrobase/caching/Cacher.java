@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Cache the results of an avrobase and also send out messages to listneres when one is updated.
+ * Cache the results of an avrobase and also send out messages to listeners when one is updated.
  * <p/>
  * User: sam
  * Date: 5/10/11
