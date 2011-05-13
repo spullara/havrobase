@@ -100,7 +100,7 @@ public class Row<T extends SpecificRecord, K> implements Externalizable, Cloneab
 
   public Row<T, K> clone() {
     Schema schema = value.getSchema();
-    T newvalue = null;
+    T newvalue;
     try {
       newvalue = (T) Class.forName(schema.getFullName()).newInstance();
     } catch (Exception e) {
