@@ -12,6 +12,7 @@ import net.sf.ehcache.Element;
 import net.sf.ehcache.config.CacheConfiguration;
 import org.apache.avro.specific.SpecificRecord;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -83,7 +84,8 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
       invalidate(row);
     } else {
       // TODO: until we offer immutable rows, clone the result
-      tkRow = ((Row<T, K>) element.getValue()).clone();
+      Serializable value = element.getValue();
+      tkRow = value == null ? null : ((Row<T, K>) value).clone();
     }
     return tkRow;
   }
