@@ -5,8 +5,6 @@ import avrobase.AvroBaseImpl;
 import avrobase.AvroFormat;
 import avrobase.Row;
 import avrobase.StreamingAvroBase;
-import com.google.common.primitives.Bytes;
-import com.google.common.primitives.UnsignedBytes;
 import com.google.inject.Inject;
 import org.apache.avro.Schema;
 import org.apache.avro.specific.SpecificRecord;
@@ -34,13 +32,10 @@ import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -647,6 +642,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
 
   public Iterable<Row<T, K>> scan(final byte[] startRow, final byte[] stopRow) throws AvroBaseException {
     final AtomicBoolean done = new AtomicBoolean(false);
+    final AtomicBoolean maxBuffer = new AtomicBoolean(false);
     final Queue<Row<T, K>> queue = new ConcurrentLinkedQueue<Row<T, K>>() {
       @Override
       public synchronized boolean isEmpty() {
@@ -685,6 +681,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
                   }
 
                   public Iterable<Row<T, K>> execute(final ResultSet rs) throws AvroBaseException, SQLException {
+                    maxBuffer.set(false);
                     while (rs.next()) {
                       byte[] row = rs.getBytes(1);
                       int schema_id = rs.getInt(2);
@@ -706,6 +703,7 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
                             if (buffer < MAX_BUFFER_SIZE) {
                               ai.set(buffer * 2);
                             }
+                            maxBuffer.set(true);
                             return null;
                           }
                         }
@@ -731,16 +729,8 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
           public boolean hasNext() {
             synchronized (queue) {
               while (tkRow == null && (tkRow = queue.poll()) == null && !queue.isEmpty()) {
-                try {
-                  if (submit.get(0, TimeUnit.SECONDS) == null && !done.get() && queue.size() == 0) {
-                    submit = getSubmit();
-                  }
-                } catch (InterruptedException e) {
-                  // ignore
-                } catch (ExecutionException e) {
-                  throw new AvroBaseException(e);
-                } catch (TimeoutException e) {
-                  // ignore, not done yet
+                if (maxBuffer.get() && !done.get() && queue.size() == 0) {
+                  submit = getSubmit();
                 }
                 try {
                   queue.wait(1000);
