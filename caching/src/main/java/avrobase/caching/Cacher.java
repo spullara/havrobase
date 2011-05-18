@@ -80,7 +80,6 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
     Row<T, K> tkRow;
     if (element == null) {
       tkRow = super.get(row);
-      cache.remove(key);
       cache.put(new Element(key, tkRow));
       invalidate(row);
     } else {
@@ -95,8 +94,9 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
   public Row<T, K> mutate(K row, Mutator<T> tMutator) throws AvroBaseException {
     Row<T, K> mutate = super.mutate(row, tMutator);
     Object key = keyMaker.make(row);
-    cache.remove(key);
-    if (mutate != null) {
+    if (mutate == null) {
+      cache.remove(key);
+    } else {
       cache.put(new Element(key, mutate));
     }
     invalidate(row);
@@ -107,8 +107,9 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
   public Row<T, K> mutate(K row, Mutator<T> tMutator, Creator<T> tCreator) throws AvroBaseException {
     Row<T, K> mutate = super.mutate(row, tMutator, tCreator);
     Object key = keyMaker.make(row);
-    cache.remove(key);
-    if (mutate != null) {
+    if (mutate == null) {
+      cache.remove(key);
+    } else {
       cache.put(new Element(key, mutate));
     }
     invalidate(row);
@@ -118,18 +119,14 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
   @Override
   public void put(K row, T value) throws AvroBaseException {
     super.put(row, value);
-    Object key = keyMaker.make(row);
-    cache.remove(key);
-    cache.put(new Element(key, new Row<T, K>(value, row)));
+    cache.put(new Element(keyMaker.make(row), new Row<T, K>(value, row)));
     invalidate(row);
   }
 
   @Override
   public boolean put(K row, T value, long version) throws AvroBaseException {
     boolean put = super.put(row, value, version);
-    Object key = keyMaker.make(row);
-    cache.remove(key);
-    cache.put(new Element(key, new Row<T, K>(value, row, version)));
+    cache.put(new Element(keyMaker.make(row), new Row<T, K>(value, row, version)));
     invalidate(row);
     return put;
   }
@@ -150,9 +147,7 @@ public class Cacher<T extends SpecificRecord, K> extends ForwardingAvroBase<T, K
           @Override
           public Row<T, K> next() {
             Row<T, K> next = iterator.next();
-            Object key = keyMaker.make(next.row);
-            cache.remove(key);
-            cache.put(new Element(key, next));
+            cache.put(new Element(keyMaker.make(next.row), next));
             invalidate(next.row);
             return next;
           }
