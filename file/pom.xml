@@ -31,6 +31,12 @@
       <artifactId>junit</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>net.java.dev.jets3t</groupId>
+      <artifactId>jets3t</artifactId>
+      <version>0.8.0</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>

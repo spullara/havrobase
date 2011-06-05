@@ -3,24 +3,40 @@ package avrobase.file;
 import avrobase.AvroFormat;
 import avrobase.ReversableFunction;
 import avrobase.Row;
+import bagcheck.Beacon;
 import bagcheck.User;
 import com.google.common.base.Charsets;
 import com.google.common.base.Supplier;
 import com.google.common.primitives.Longs;
+import org.apache.avro.Schema;
+import org.apache.avro.io.Decoder;
+import org.apache.avro.io.DecoderFactory;
+import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.util.Utf8;
+import org.jets3t.service.S3Service;
+import org.jets3t.service.S3ServiceException;
+import org.jets3t.service.impl.rest.httpclient.RestS3Service;
+import org.jets3t.service.model.S3Object;
+import org.jets3t.service.security.AWSCredentials;
+import org.jets3t.service.security.ProviderCredentials;
 import org.junit.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.GZIPInputStream;
 
 import static junit.framework.Assert.assertEquals;
 
@@ -155,5 +171,71 @@ public class FABTest {
 
   Utf8 $(String s) {
     return new Utf8(s);
+  }
+
+  public void testBeaconLoadAndScan() throws IOException, S3ServiceException, InterruptedException {
+    final FAB<Beacon, byte[]> beaconFAB = new FAB<Beacon, byte[]>("/Volumes/Data/tmp/beacons", "/Volumes/Data/tmp/schemas", new Supplier<byte[]>() {
+      Random r = new SecureRandom();
+      @Override
+      public byte[] get() {
+        return Longs.toByteArray(r.nextLong());
+      }
+    }, Beacon.SCHEMA$, AvroFormat.BINARY, null);
+    Properties p = new Properties();
+    p.load(getClass().getResourceAsStream("creds.properties"));
+    ProviderCredentials pc = new AWSCredentials(p.getProperty("AWS_ACCESS_KEY_ID"), p.getProperty("AWS_SECRET_ACCESS_KEY"));
+    final RestS3Service s3 = new RestS3Service(pc);
+    S3Object[] s3Objects = s3.listObjects("com.bagcheck.archive", "beacons/", null);
+    ExecutorService es = Executors.newCachedThreadPool();
+    List<Callable<Void>> callables = new ArrayList<Callable<Void>>();
+    for (final S3Object s3Object : s3Objects) {
+      if (!s3Object.getName().equals("beacons/")) {
+        callables.add(new Callable<Void>() {
+          @Override
+          public Void call() throws Exception {
+            S3Object object = s3.getObject(s3Object.getBucketName(), s3Object.getName());
+            DataInputStream dis = new DataInputStream(new GZIPInputStream(object.getDataInputStream()));
+            byte[] bytes = new byte[dis.readInt()];
+            dis.readFully(bytes);
+            byte[] valuebytes = new byte[1024];
+            Schema writerSchema = Schema.parse(new ByteArrayInputStream(bytes));
+            while(dis.readBoolean()) {
+              byte[] row = new byte[dis.readInt()];
+              dis.readFully(row);
+              int len = dis.readInt();
+              if (len > valuebytes.length) {
+                valuebytes = new byte[len];
+              }
+              dis.readFully(valuebytes, 0, len);
+              DecoderFactory decoderFactory = new DecoderFactory();
+              Decoder d = decoderFactory.binaryDecoder(new ByteArrayInputStream(valuebytes, 0, len), null);
+              // Read the data
+              SpecificDatumReader<Beacon> sdr = new SpecificDatumReader<Beacon>(writerSchema, Beacon.SCHEMA$);
+              Beacon read = sdr.read(null, d);
+              beaconFAB.put(row, read);
+            }
+            return null;
+          }
+        });
+      }
+    }
+    es.invokeAll(callables);
+    es.shutdownNow();
+  }
+
+  @Test
+  public void testBeaconScan() {
+    final FAB<Beacon, byte[]> beaconFAB = new FAB<Beacon, byte[]>("/Volumes/Data/tmp/beacons", "/Volumes/Data/tmp/schemas", new Supplier<byte[]>() {
+      Random r = new SecureRandom();
+      @Override
+      public byte[] get() {
+        return Longs.toByteArray(r.nextLong());
+      }
+    }, Beacon.SCHEMA$, AvroFormat.BINARY, null);
+    int total = 0;
+    for (Row<Beacon, byte[]> beaconRow : beaconFAB.scan(null, null)) {
+      total++;
+    }
+    System.out.println(total);
   }
 }

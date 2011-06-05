@@ -92,7 +92,7 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
 
   private String toString(K row) {
     if (row == null) return null;
-    byte[] bytes = transformer.apply(row);
+    byte[] bytes = transformer == null ? (byte[]) row : transformer.apply(row);
     try {
       return new String(base32hex.encode(bytes));
     } catch (IOException e) {
@@ -388,7 +388,8 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
               } else {
                 StringBuilder sb = getPath(file);
                 try {
-                  current = get(transformer.unapply(base32hex.decode(sb.toString().toCharArray())));
+                  byte[] decode = base32hex.decode(sb.toString().toCharArray());
+                  current = get(transformer == null ? (K) decode : transformer.unapply(decode));
                   return current != null || hasNext();
                 } catch (IOException e) {
                   throw new AvroBaseException("Corrupt file system: " + file, e);

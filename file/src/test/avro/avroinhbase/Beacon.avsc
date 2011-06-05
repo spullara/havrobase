@@ -1,6 +1,7 @@
     {
       "type":"record",
       "name":"Beacon",
+       "namespace":"bagcheck",
       "fields":[
         {
           "name":"browser",
