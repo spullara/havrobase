@@ -155,7 +155,11 @@ public class FAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> {
       Schema schema = schemaCache.get(hash);
       if (schema == null) {
         File schemaFile = new File(schemaDir, hash);
-        schema = Schema.parse(new FileInputStream(schemaFile));
+        try {
+          schema = Schema.parse(new FileInputStream(schemaFile));
+        } catch (IOException ioe) {
+          throw new AvroBaseException("Failed to read schema for hash: " + hash + " row: " + row, ioe);
+        }
         schemaCache.put(hash, schema);
         hashCache.put(schema, hash);
       }
