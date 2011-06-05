@@ -1,0 +1,42 @@
+    {
+      "type":"record",
+      "name":"Update",
+      "namespace":"avrobase.data",
+      "fields":[
+        {
+          "name":"type",
+          "type":"string",
+          "doc":"Update type specifying the view"
+        },
+        {
+          "name":"owner",
+          "type":"string",
+          "doc":"The profile id of the owner of this update"
+        },
+        {
+          "name":"bag",
+          "type":["null", "string"],
+          "doc":"Related bag if any"
+        },
+        {
+          "name":"image",
+          "type":["null", "string"],
+          "doc":"Representative image for the update"
+        },
+        {
+          "name":"text",
+          "type":["null", "string"],
+          "doc":"Comment on the update by the creator or defaulted if none given"
+        },
+        {
+          "name":"created",
+          "type":"long",
+          "doc":"When the update was created"
+        },
+        {
+          "name":"updated",
+          "type":"long",
+          "doc":"The last time the update was changed"
+        }
+        ]
+}
