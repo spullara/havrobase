@@ -232,6 +232,8 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
         dos.writeBoolean(true);
         writeSchemaRow(dos, id, hash, json);
       }
+      rs.close();
+      ps.close();
       dos.writeBoolean(false);
       connection.close();
     } finally {
@@ -451,8 +453,8 @@ public class MysqlAB<T extends SpecificRecord, K> extends AvroBaseImpl<T, K> imp
             throw new AvroBaseException("unexpected response");
           }
         } finally {
-          if (rs2 != null) ps.close();
-          if (ps2 != null) ps.close();
+          if (rs2 != null) rs2.close();
+          if (ps2 != null) ps2.close();
           if (ps != null) ps.close();
           if (c != null) c.close();
         }
