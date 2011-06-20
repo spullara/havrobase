@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -60,7 +61,7 @@ import static com.google.common.collect.Lists.newArrayList;
  * boolean - has next
  * length, bytes - row
  * length, bytes - value
- *
+ * <p/>
  * Typically you would move all to S3 but only truncate after some delay for fast access to more recent data.
  * <p/>
  * User: sam
@@ -71,14 +72,16 @@ import static com.google.common.collect.Lists.newArrayList;
 public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, byte[]> {
   protected S3Service s3;
   private String bucket;
+  private boolean reverse;
   private String path;
   private Schema actualSchema;
 
   @Inject
-  public S3Archiver(AvroBase<T, byte[]> ab, Schema actualSchema, S3Service s3, String bucket, String path) {
+  public S3Archiver(AvroBase<T, byte[]> ab, Schema actualSchema, S3Service s3, String bucket, String path, boolean reverse) {
     super(ab);
     this.s3 = s3;
     this.bucket = bucket;
+    this.reverse = reverse;
     this.path = path.endsWith("/") ? path : path + "/";
     this.actualSchema = actualSchema;
   }
@@ -112,6 +115,9 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
           // Local
           private byte[] lastdelegatekey;
           private Row<T, byte[]> lastdelegaterow;
+          boolean firstrow = false;
+          public byte[] firstdelegatekey;
+          private Row<T, byte[]> firstdelegaterow;
 
           // S3
           private ArrayList<S3Object> files;
@@ -124,6 +130,19 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
 
           @Override
           public synchronized boolean hasNext() {
+            if (reverse) {
+              // Scan what we have locally
+              if (iterator.hasNext()) {
+                firstdelegaterow = iterator.next();
+                firstdelegatekey = firstdelegaterow == null ? null : firstdelegaterow.row;
+              }
+              return startArchived();
+            } else {
+              return stopArchived();
+            }
+          }
+
+          private boolean stopArchived() {
             // Scan what we have locally
             if (iterator.hasNext()) {
               return true;
@@ -142,38 +161,16 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
             if (hasmore != null) return hasmore;
             // Read the files in sequence, moving between them as they run out of data
             do {
-              if (currentstream == null) {
-                if (files.size() == 0) return hasmore = false;
-                final S3Object nextFile = files.remove(0);
-                try {
-                  currentstream = new DataInputStream(new GZIPInputStream(getInputStream(nextFile)));
-                  final byte[] bytes = new byte[currentstream.readInt()];
-                  currentstream.readFully(bytes);
-                  schema = Schema.parse(new ByteArrayInputStream(bytes));
-                } catch (ServiceException e) {
-                  throw new AvroBaseException("Failed to read inputstream from S3: " + nextFile, e);
-                } catch (IOException e) {
-                  throw new AvroBaseException("Failed to read schema", e);
-                }
-              }
+              if (assertCurrentStream()) return hasmore = false;
               try {
                 do {
                   hasmore = currentstream.readBoolean();
                   if (hasmore) {
                     // We may be reading things that are supposed to be still in the
                     // local store but haven't been deleted yet
-                    row = new byte[currentstream.readInt()];
-                    currentstream.readFully(row);
-                    if (stopRow != null) {
-                      int compare = bytesComparator.compare(row, stopRow);
-                      if (compare >= 0) {
-                        currentstream.close();
-                        currentstream = null;
-                        return hasmore = false;
-                      }
-                    }
+                    if (nextRowInStream()) return hasmore = false;
                     if (lastdelegatekey != null) {
-                        // skip archived rows we have already scanned
+                      // skip archived rows we have already scanned
                       final int compare = bytesComparator.compare(lastdelegatekey, row);
                       if (compare < 0) {
                         break;
@@ -198,12 +195,118 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
             return hasmore;
           }
 
+          private boolean startArchived() {
+            // Scan S3
+            if (files == null) {
+              files = getArchives();
+            }
+            // If .next() hasn't been called return the previous answer
+            if (hasmore != null) return hasmore;
+            // Read the files in sequence, moving between them as they run out of data
+            if (firstdelegaterow != null) {
+              do {
+                if (assertCurrentStream()) return hasmore = false;
+                try {
+                  do {
+                    hasmore = currentstream.readBoolean();
+                    if (hasmore) {
+                      if (nextRowInStream()) return hasmore = false;
+
+                      if (firstdelegatekey != null) {
+                        // skip archived rows we have already scanned
+                        final int compare = bytesComparator.compare(firstdelegatekey, row);
+                        if (compare >= 0) {
+                          break;
+                        } else {
+                          currentstream.readFully(new byte[currentstream.readInt()]);
+                        }
+                      } else {
+                        break;
+                      }
+                    } else {
+                      currentstream.close();
+                      currentstream = null;
+                    }
+                  } while (hasmore);
+                } catch (EOFException e) {
+                  e.printStackTrace();
+                  return hasmore = false;
+                } catch (IOException e) {
+                  throw new AvroBaseException("Failed to read s3 object stream", e);
+                }
+              } while (!hasmore);
+            } else {
+              hasmore = false;
+            }
+            if (!hasmore) {
+              if (stopRow != null && bytesComparator.compare(row, stopRow) >= 0) {
+                return false;
+              }
+              if (firstdelegaterow != null) {
+                firstrow = true;
+                return hasmore = true;
+              }
+              return hasmore = iterator.hasNext();
+            }
+            return hasmore;
+          }
+
+          private boolean nextRowInStream() throws IOException {
+            // We may be reading things that are supposed to be still in the
+            // local store but haven't been deleted yet
+            row = new byte[currentstream.readInt()];
+            currentstream.readFully(row);
+            if (stopRow != null) {
+              int compare = bytesComparator.compare(row, stopRow);
+              if (compare >= 0) {
+                currentstream.close();
+                currentstream = null;
+                return true;
+              }
+            }
+            return false;
+          }
+
+          private boolean assertCurrentStream() {
+            if (currentstream == null) {
+              if (files.size() == 0) return true;
+              final S3Object nextFile = files.remove(0);
+              try {
+                currentstream = new DataInputStream(new GZIPInputStream(getInputStream(nextFile)));
+                final byte[] bytes = new byte[currentstream.readInt()];
+                currentstream.readFully(bytes);
+                schema = Schema.parse(new ByteArrayInputStream(bytes));
+              } catch (ServiceException e) {
+                throw new AvroBaseException("Failed to read inputstream from S3: " + nextFile, e);
+              } catch (IOException e) {
+                throw new AvroBaseException("Failed to read schema", e);
+              }
+            }
+            return false;
+          }
+
           @Override
           public synchronized Row<T, byte[]> next() {
             // Grab the next local value
-            if (lastdelegatekey == null) return lastdelegaterow = iterator.next();
+            if (reverse) {
+              if (firstrow) {
+                try {
+                  firstrow = false;
+                  hasmore = null;
+                  return firstdelegaterow;
+                } finally {
+                  firstdelegaterow = null;
+                }
+              }
+              if (firstdelegaterow == null) {
+                return iterator.next();
+              }
+            } else {
+              if (lastdelegatekey == null) return lastdelegaterow = iterator.next();
+            }
             // Grab the next S3 value
-            if ((files.size() == 0 && currentstream == null) || (hasmore != null && !hasmore)) throw new NoSuchElementException();
+            if ((files.size() == 0 && currentstream == null) || (hasmore != null && !hasmore))
+              throw new NoSuchElementException();
             hasmore = null;
             try {
               byte[] bytes = new byte[currentstream.readInt()];
@@ -262,24 +365,34 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
    * Roll copies everything from startrow to the end to S3 in
    * a new file.
    *
-   * @param startrow
+   * @param row
    * @throws AvroBaseException
    */
-  public void roll(byte[] startrow) throws AvroBaseException {
-    // Find the first entry in the archives
-    ArrayList<S3Object> archives = getArchives();
-    byte[] archiveStartrow;
+  public void roll(byte[] row) throws AvroBaseException {
+    // Find the entry in the archives
+    List<S3Object> archives = getArchives();
+    byte[] archiveRow;
     if (archives.size() > 0) {
       try {
-        archiveStartrow = Hex.decodeHex(archives.get(0).getName().substring(path.length()).toCharArray());
+        if (reverse) {
+          archiveRow = Hex.decodeHex(archives.get(archives.size() - 1).getName().substring(path.length()).toCharArray());
+        } else {
+          archiveRow = Hex.decodeHex(archives.get(0).getName().substring(path.length()).toCharArray());
+        }
       } catch (DecoderException e) {
-        throw new AvroBaseException("Failed to get start row from archives: " + archives, e);
+        throw new AvroBaseException("Failed to get row from archives: " + archives, e);
       }
-      if (bytesComparator.compare(startrow, archiveStartrow) >= 0) {
-        return;
+      if (reverse) {
+        if (bytesComparator.compare(row, archiveRow) < 0) {
+          return;
+        }
+      } else {
+        if (bytesComparator.compare(row, archiveRow) >= 0) {
+          return;
+        }
       }
     } else {
-      archiveStartrow = null;
+      archiveRow = null;
     }
     File file = null;
     try {
@@ -288,10 +401,16 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
       byte[] bytes = actualSchema.toString().getBytes(Charsets.UTF_8);
       dos.writeInt(bytes.length);
       dos.write(bytes);
-      for (Row<T, byte[]> tRow : delegate().scan(startrow, null)) {
-        if (archiveStartrow != null) {
-          if (bytesComparator.compare(tRow.row, archiveStartrow) >= 0) {
-            break;
+      for (Row<T, byte[]> tRow : getScanner(row)) {
+        if (archiveRow != null) {
+          if (reverse) {
+            if (bytesComparator.compare(tRow.row, archiveRow) < 0) {
+              break;
+            }
+          } else {
+            if (bytesComparator.compare(tRow.row, archiveRow) >= 0) {
+              break;
+            }
           }
         }
         dos.writeBoolean(true);
@@ -311,7 +430,7 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
       dos.close();
       // Retry 3 times
       for (int i = 0; i < 3; i++) {
-        S3Object s3o = new S3Object(path + new String(Hex.encodeHex(startrow)));
+        S3Object s3o = new S3Object(path + new String(Hex.encodeHex(row)));
         s3o.setContentLength(file.length());
         s3o.setDataInputStream(new BufferedInputStream(new FileInputStream(file)));
         s3o.setContentType("application/gzip");
@@ -330,14 +449,25 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
   }
 
   /**
-   * Truncate deletes everything after startrow. You only want to do this after
+   * Truncate deletes everything after row (or before row). You only want to do this after
    * you have archived it all.
-   * 
-   * @param startrow
+   *
+   * @param row
    */
-  public void truncate(byte[] startrow) {
-    for (Row<T, byte[]> tRow : delegate().scan(startrow, null)) {
+  public void truncate(byte[] row) {
+    final Iterable<Row<T, byte[]>> scan = getScanner(row);
+    for (Row<T, byte[]> tRow : scan) {
       delegate().delete(tRow.row);
     }
+  }
+
+  private Iterable<Row<T, byte[]>> getScanner(byte[] row) {
+    final Iterable<Row<T, byte[]>> scan;
+    if (reverse) {
+      scan = delegate().scan(null, row);
+    } else {
+      scan = delegate().scan(row, null);
+    }
+    return scan;
   }
 }
