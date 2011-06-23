@@ -445,6 +445,10 @@ public class S3Archiver<T extends SpecificRecord> extends ForwardingAvroBase<T, 
       }
     } catch (IOException e) {
       throw new AvroBaseException("Failed to read/write file: " + file, e);
+    } finally {
+      if (file != null) {
+        file.delete();
+      }
     }
   }
 
