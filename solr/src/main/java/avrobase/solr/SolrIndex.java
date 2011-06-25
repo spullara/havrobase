@@ -250,10 +250,7 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
           for (Object e : ga) {
             if (e instanceof SpecificRecord) {
               SpecificRecord sr = (SpecificRecord) e;
-              Schema.Field innerfield = sr.getSchema().getField(field);
-              if (innerfield != null) {
-                document.addField(solrfield, sr.get(innerfield.pos()));
-              }
+              addField(sr, sr.getSchema(), document, field, solrfield);
             } else {
               throw new AvroBaseException("Invalid field name" + solrfield);
             }
