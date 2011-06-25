@@ -20,7 +20,6 @@ import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrDocumentList;
 import org.apache.solr.common.SolrInputDocument;
-import org.apache.solr.common.params.ShardParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -192,29 +191,11 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
    * @return
    */
   public void index(Row<T,K> row) throws AvroBaseException {
-    Schema schema = row.value.getSchema();
+    T value = row.value;
+    Schema schema = value.getSchema();
     SolrInputDocument document = new SolrInputDocument();
     for (String field : fields) {
-      Schema.Field f = schema.getField(field);
-      if (f != null) {
-        Object o = row.value.get(f.pos());
-        if (o instanceof GenericArray) {
-          GenericArray ga = (GenericArray) o;
-          for (Object e : ga) {
-            if (e instanceof SpecificRecord) {
-              SpecificRecord sr = (SpecificRecord) e;
-              Schema.Field idField = sr.getSchema().getField("id");
-              if (idField != null) {
-                document.addField(field, sr.get(idField.pos()));
-              }
-            } else {
-              document.addField(field, e);
-            }
-          }
-        } else {
-          document.addField(field, o);
-        }
-      }
+      addField(value, schema, document, field, field);
     }
     document.addField(uniqueKey, keyTx.apply(row.row));
     try {
@@ -253,6 +234,55 @@ public class SolrIndex<T extends SpecificRecord, K> implements Index<T, K, SQ> {
       throw new AvroBaseException(e);
     } catch (IOException e) {
       throw new AvroBaseException(e);
+    }
+  }
+
+  private void addField(SpecificRecord value, Schema schema, SolrInputDocument document, String field, String solrfield) {
+    int dotindex;
+    Schema.Field f;
+    while ((dotindex = field.indexOf("_")) != -1) {
+      f = schema.getField(field.substring(0, dotindex));
+      if (f != null) {
+        field = field.substring(dotindex + 1);
+        Object o = value.get(f.pos());
+        if (o instanceof GenericArray) {
+          GenericArray ga = (GenericArray) o;
+          for (Object e : ga) {
+            if (e instanceof SpecificRecord) {
+              SpecificRecord sr = (SpecificRecord) e;
+              Schema.Field innerfield = sr.getSchema().getField(field);
+              if (innerfield != null) {
+                document.addField(solrfield, sr.get(innerfield.pos()));
+              }
+            } else {
+              throw new AvroBaseException("Invalid field name" + solrfield);
+            }
+          }
+          return;
+        }
+      } else {
+        throw new AvroBaseException("Invalid field name" + solrfield);
+      }
+    }
+    f = schema.getField(field);
+    if (f != null) {
+      Object o = value.get(f.pos());
+      if (o instanceof GenericArray) {
+        GenericArray ga = (GenericArray) o;
+        for (Object e : ga) {
+          if (e instanceof SpecificRecord) {
+            SpecificRecord sr = (SpecificRecord) e;
+            Schema.Field idField = sr.getSchema().getField("id");
+            if (idField != null) {
+              document.addField(solrfield, sr.get(idField.pos()));
+            }
+          } else {
+            document.addField(solrfield, e);
+          }
+        }
+      } else {
+        document.addField(solrfield, o);
+      }
     }
   }
 }
