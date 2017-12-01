@@ -1,0 +1,11 @@
+Requirements:
+
+- singletons by default
+- everything by enumeration
+
+bind(USER_ANSWERS_AB).toInstance(new MysqlAB()...);
+bind(USER_ANSWERS_AB).toClass(MysqlAB.class);
+
+- forwarding pusher for sub contexts
+
+- no dependencies except guava
